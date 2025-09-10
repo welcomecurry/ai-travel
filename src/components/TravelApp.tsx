@@ -1,0 +1,63 @@
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import Landing from './Landing';
+import TravelChat from './TravelChat';
+
+type AppState = 'landing' | 'transitioning' | 'chat';
+
+const TravelApp: React.FC = () => {
+  const [appState, setAppState] = useState<AppState>('landing');
+  const [initialMessage, setInitialMessage] = useState<string>('');
+
+  const handleStartChat = (message: string) => {
+    setInitialMessage(message);
+    setAppState('transitioning');
+    
+    // Transition to chat after animation
+    setTimeout(() => {
+      setAppState('chat');
+    }, 600); // Match animation duration
+  };
+
+  useEffect(() => {
+    // If we're transitioning to chat and have an initial message, send it
+    if (appState === 'chat' && initialMessage) {
+      // This will be handled by TravelChat component
+      // Reset the initial message after it's been processed
+      setTimeout(() => {
+        setInitialMessage('');
+      }, 100);
+    }
+  }, [appState, initialMessage]);
+
+  return (
+    <div className="relative w-full h-screen overflow-hidden">
+      {/* Landing Page */}
+      {(appState === 'landing' || appState === 'transitioning') && (
+        <div 
+          className={`absolute inset-0 z-10 ${
+            appState === 'transitioning' ? 'animate-slide-out-left' : 'animate-fade-in-up'
+          }`}
+        >
+          <Landing onStartChat={handleStartChat} />
+        </div>
+      )}
+
+      {/* Chat Interface */}
+      {(appState === 'transitioning' || appState === 'chat') && (
+        <div 
+          className={`absolute inset-0 ${
+            appState === 'transitioning' 
+              ? 'opacity-0 translate-x-full' 
+              : 'animate-slide-in-right'
+          } transition-all duration-600 ease-out`}
+        >
+          <TravelChat initialMessage={initialMessage} />
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default TravelApp;
