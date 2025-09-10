@@ -272,3 +272,53 @@ body {
 .animate-stagger-4 {
   animation: fade-in-up 0.8s ease-out 0.4s both;
 }
+
+/* Conveyer belt animations for designing trip */
+@keyframes conveyer-slide {
+  0% {
+    opacity: 0;
+    transform: translateX(-100px);
+  }
+  20% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  80% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(100px);
+  }
+}
+
+.animate-conveyer-1 {
+  animation: conveyer-slide 4s ease-in-out infinite;
+}
+
+.animate-conveyer-2 {
+  animation: conveyer-slide 4s ease-in-out infinite 1s;
+}
+
+.animate-conveyer-3 {
+  animation: conveyer-slide 4s ease-in-out infinite 2s;
+}
+
+.animate-conveyer-4 {
+  animation: conveyer-slide 4s ease-in-out infinite 3s;
+}
+
+/* Floating animation for designing avatar */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}

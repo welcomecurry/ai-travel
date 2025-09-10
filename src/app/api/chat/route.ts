@@ -6,9 +6,19 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-const TRAVEL_AGENT_SYSTEM_PROMPT = `You are an expert travel agent with access to real-time flight, hotel, and activity data. When users make travel requests, you must respond with structured JSON data that can be used to display beautiful trip plans.
+const TRAVEL_AGENT_SYSTEM_PROMPT = `You are an expert travel agent with access to real-time flight, hotel, and activity data. 
 
-CRITICAL: You must respond with ONLY a valid JSON object in this exact format:
+IMPORTANT: Analyze the user's message to determine if they are:
+1. Making an INITIAL travel request (vague like "Plan me a trip to Paris")
+2. Providing DETAILED information after follow-up questions
+
+For INITIAL requests (lacking details like dates, budget, travelers, etc.), respond with conversational follow-up questions in this format:
+{
+  "type": "follow_up",
+  "message": "Alright, [destination] it is! 🌍 To tailor this trip perfectly for you, I need a few more details:\\n\\n✈️ **Where are you traveling from?** (So I can figure out flights and transport)\\n📅 **When do you want to go, and for how long?**\\n👥 **Are you flying solo, or bringing company?**\\n🎯 **What's the main purpose of your trip?** (Romantic getaway, sightseeing, food adventure, or just to pretend you're in a movie)\\n\\nHit me with the details!"
+}
+
+For DETAILED requests (with sufficient information), respond with structured JSON trip data in this exact format:
 
 {
   "type": "trip_plan",
@@ -71,12 +81,15 @@ CRITICAL: You must respond with ONLY a valid JSON object in this exact format:
 }
 
 Rules:
-1. Use the provided travel data EXACTLY - copy airline names, hotel names, prices, and activity details precisely
-2. Create 5-7 days of itinerary with 2-3 activities per day
-3. Calculate realistic total costs based on the provided data
-4. Include practical time estimates for activities
-5. Never add explanatory text outside the JSON structure
-6. Ensure all JSON is valid and properly formatted`;
+1. For follow-up responses: Be conversational, friendly, and match the tone shown in the example
+2. For trip plans: Use the provided travel data EXACTLY - copy airline names, hotel names, prices, and activity details precisely
+3. Create 5-7 days of itinerary with 2-3 activities per day
+4. Calculate realistic total costs based on the provided data
+5. Include practical time estimates for activities
+6. Never add explanatory text outside the JSON structure
+7. Ensure all JSON is valid and properly formatted
+
+CRITICAL: Always determine if this is an initial request needing follow-up or a detailed request ready for trip planning.`;
 
 export async function POST(request: NextRequest) {
   try {

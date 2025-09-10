@@ -3,15 +3,20 @@
 import React, { useState, useRef, useEffect } from 'react';
 import TripPlan, { TripPlanData } from './TripPlan';
 import TripPlanSkeleton from './TripPlanSkeleton';
+import DesigningTrip from './DesigningTrip';
+import TypewriterText from './TypewriterText';
 
 interface Message {
   id: string;
   content: string;
   sender: 'user' | 'ai';
   timestamp: Date;
-  type?: 'text' | 'trip_plan';
+  type?: 'text' | 'trip_plan' | 'follow_up';
   tripData?: TripPlanData;
+  isTyping?: boolean;
 }
+
+type ConversationPhase = 'initial' | 'follow_up' | 'generating' | 'complete';
 
 interface LoadingStage {
   stage: 'searching' | 'flights' | 'hotels' | 'activities' | 'itinerary' | 'complete';
@@ -27,35 +32,50 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
   
   return (
     <div 
-      className={`flex mb-4 animate-fade-in ${isUser ? 'justify-end' : 'justify-start'}`}
+      className={`flex mb-6 animate-fade-in ${isUser ? 'justify-end' : 'justify-start'}`}
     >
       {!isUser && (
-        <div className="flex-shrink-0 mr-3">
-          <div className="w-8 h-8 layla-gradient rounded-full flex items-center justify-center">
-            <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+        <div className="flex-shrink-0 mr-4">
+          <div className="w-10 h-10 layla-gradient rounded-full flex items-center justify-center layla-shadow-soft">
+            <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
               <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
         </div>
       )}
       
-      <div className={`max-w-xs lg:max-w-sm px-4 py-3 rounded-2xl break-words ${
-        isUser 
-          ? 'layla-gradient text-white rounded-br-md' 
-          : 'layla-card border border-gray-200 layla-text-primary rounded-bl-md'
-      }`}>
-        <p className="text-sm leading-relaxed font-medium">{message.content}</p>
-        <p className={`text-xs mt-2 ${
-          isUser ? 'text-white/70' : 'layla-text-secondary'
+      <div className="flex flex-col max-w-lg">
+        <div className={`px-6 py-4 rounded-2xl break-words ${
+          isUser 
+            ? 'layla-gradient text-white rounded-br-lg layla-shadow-soft' 
+            : 'bg-white border border-gray-100 layla-text-primary rounded-bl-lg layla-shadow-soft'
+        }`}>
+          {message.isTyping ? (
+            <TypewriterText 
+              text={message.content}
+              speed={30}
+              className="text-sm leading-relaxed font-medium"
+            />
+          ) : (
+            <div 
+              className="text-sm leading-relaxed font-medium"
+              dangerouslySetInnerHTML={{ 
+                __html: message.content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br />') 
+              }}
+            />
+          )}
+        </div>
+        <p className={`text-xs mt-2 px-2 ${
+          isUser ? 'text-gray-400 text-right' : 'layla-text-secondary'
         }`}>
           {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </p>
       </div>
       
       {isUser && (
-        <div className="flex-shrink-0 ml-3">
-          <div className="w-8 h-8 bg-gray-500 rounded-full flex items-center justify-center">
-            <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+        <div className="flex-shrink-0 ml-4">
+          <div className="w-10 h-10 bg-gray-400 rounded-full flex items-center justify-center layla-shadow-soft">
+            <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
             </svg>
           </div>
@@ -81,6 +101,7 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
   ]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [conversationPhase, setConversationPhase] = useState<ConversationPhase>('initial');
   const [loadingStage, setLoadingStage] = useState<LoadingStage>({ stage: 'searching', message: 'Analyzing your request...' });
   const [currentTripPlan, setCurrentTripPlan] = useState<TripPlanData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -97,7 +118,7 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
 
   // Handle initial message from landing page
   useEffect(() => {
-    if (initialMessage && !isLoading) {
+    if (initialMessage && !isLoading && conversationPhase === 'initial') {
       setInputValue(initialMessage);
       // Auto-send the initial message after a brief delay
       setTimeout(() => {
@@ -113,14 +134,14 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
           setInputValue('');
           setError(null);
           setIsLoading(true);
-          simulateLoadingStages();
+          setConversationPhase('follow_up');
           
           // Make API call
           handleAPICall(initialMessage.trim());
         }
       }, 500);
     }
-  }, [initialMessage]);
+  }, [initialMessage, conversationPhase]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInputValue(e.target.value);
@@ -204,19 +225,33 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
 
       // Try to parse the complete response as JSON
       try {
-        const tripPlanData = JSON.parse(accumulatedContent);
+        const responseData = JSON.parse(accumulatedContent);
         
-        if (tripPlanData.type === 'trip_plan') {
-          // Set trip plan data for right column
-          setCurrentTripPlan(tripPlanData);
+        if (responseData.type === 'follow_up') {
+          // This is a follow-up response - stay in follow_up phase
+          const followUpMessage: Message = {
+            id: Date.now().toString() + '-followup',
+            content: responseData.message,
+            sender: 'ai',
+            timestamp: new Date(),
+            type: 'follow_up',
+            isTyping: true
+          };
+          setMessages(prev => [...prev, followUpMessage]);
+          
+        } else if (responseData.type === 'trip_plan') {
+          // This is a complete trip plan - set data and move to complete phase
+          setCurrentTripPlan(responseData);
+          setConversationPhase('complete');
           
           // Add AI confirmation message
           const confirmMessage: Message = {
             id: Date.now().toString() + '-confirm',
-            content: `I've created a ${tripPlanData.duration} itinerary for ${tripPlanData.destination}! Check out your trip plan on the right. Let me know if you'd like me to adjust anything.`,
+            content: `I've created a ${responseData.duration} itinerary for ${responseData.destination}! Check out your trip plan on the right. Let me know if you'd like me to adjust anything.`,
             sender: 'ai',
             timestamp: new Date(),
-            type: 'text'
+            type: 'text',
+            isTyping: true
           };
           setMessages(prev => [...prev, confirmMessage]);
         } else {
@@ -284,8 +319,15 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
       textareaRef.current.style.height = 'auto';
     }
 
-    // Start loading animation
-    simulateLoadingStages();
+    // If we're in follow_up phase and user is providing details, move to generating phase
+    if (conversationPhase === 'follow_up') {
+      // Check if this looks like detailed information (has numbers, dates, etc.)
+      const hasDetails = /\d/.test(currentInput) || currentInput.split(' ').length > 10;
+      if (hasDetails) {
+        setConversationPhase('generating');
+        simulateLoadingStages();
+      }
+    }
 
     // Make API call
     await handleAPICall(currentInput);
@@ -353,87 +395,110 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Chat Input */}
+        {/* Chat Input - Layla.ai Style */}
         <div className="bg-white border-t border-gray-100 px-6 py-6">
-          <div className="flex items-end layla-grid-16">
-            <div className="flex-1 relative">
-              <textarea
-                ref={textareaRef}
-                value={inputValue}
-                onChange={handleInputChange}
-                onKeyPress={handleKeyPress}
-                placeholder="Where would you like to go?"
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent min-h-[48px] max-h-[120px] text-sm leading-relaxed font-medium"
-                rows={1}
-                disabled={isLoading}
-              />
+          <div className="relative">
+            <div className="bg-white border border-gray-200 rounded-2xl layla-shadow-soft focus-within:border-teal-500 focus-within:ring-4 focus-within:ring-teal-100 transition-all duration-200">
+              <div className="flex items-end">
+                <div className="flex-1 relative">
+                  <textarea
+                    ref={textareaRef}
+                    value={inputValue}
+                    onChange={handleInputChange}
+                    onKeyPress={handleKeyPress}
+                    placeholder="Where would you like to go?"
+                    className="w-full px-6 py-4 bg-transparent border-none resize-none focus:outline-none text-base leading-relaxed font-medium layla-text-primary placeholder:layla-text-secondary min-h-[56px] max-h-[120px]"
+                    rows={1}
+                    disabled={isLoading}
+                  />
+                </div>
+                <div className="p-2">
+                  <button
+                    onClick={handleSend}
+                    disabled={!inputValue.trim() || isLoading}
+                    className="w-12 h-12 layla-gradient rounded-xl flex items-center justify-center transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 layla-shadow-soft"
+                  >
+                    {isLoading ? (
+                      <svg className="w-6 h-6 animate-spin text-white" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="m100-200c0-8.284-6.716-15-15-15-8.284 0-15 6.716-15 15 0 8.284 6.716 15 15 15 8.284 0 15-6.716 15-15zm-1.5 0c0 7.456-6.044 13.5-13.5 13.5-7.456 0-13.5-6.044-13.5-13.5 0-7.456 6.044-13.5 13.5-13.5 7.456 0 13.5 6.044 13.5 13.5z"></path>
+                      </svg>
+                    ) : (
+                      <svg 
+                        className="w-6 h-6 transform rotate-45 text-white" 
+                        fill="currentColor" 
+                        viewBox="0 0 20 20"
+                      >
+                        <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
+              </div>
             </div>
-            <button
-              onClick={handleSend}
-              disabled={!inputValue.trim() || isLoading}
-              className="layla-button layla-button-primary px-4 py-3 rounded-xl"
-            >
-              {isLoading ? (
-                <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="m100-200c0-8.284-6.716-15-15-15-8.284 0-15 6.716-15 15 0 8.284 6.716 15 15 15 8.284 0 15-6.716 15-15zm-1.5 0c0 7.456-6.044 13.5-13.5 13.5-7.456 0-13.5-6.044-13.5-13.5 0-7.456 6.044-13.5 13.5-13.5 7.456 0 13.5 6.044 13.5 13.5z"></path>
-                </svg>
-              ) : (
-                <svg 
-                  className="w-5 h-5 transform rotate-45" 
-                  fill="currentColor" 
-                  viewBox="0 0 20 20"
-                >
-                  <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
-                </svg>
-              )}
-            </button>
           </div>
         </div>
       </div>
 
       {/* Itinerary Column - Right Side (60%) */}
       <div className="hidden lg:flex lg:w-3/5 flex-col bg-gray-50">
-        {isLoading ? (
-          <TripPlanSkeleton loadingStage={loadingStage} />
-        ) : currentTripPlan ? (
-          <div className="h-full overflow-y-auto scrollbar-hide">
-            <TripPlan 
-              tripData={currentTripPlan} 
-              onBookTrip={() => console.log('Book trip clicked')}
-            />
-          </div>
-        ) : (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center max-w-md mx-auto px-6">
-              <div className="w-24 h-24 layla-gradient rounded-full flex items-center justify-center mx-auto mb-6">
-                <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <h2 className="text-2xl font-semibold layla-text-primary layla-heading mb-4">
-                Ready to Plan Your Trip?
-              </h2>
-              <p className="layla-text-secondary text-lg leading-relaxed">
-                Tell me where you'd like to go and I'll create a personalized itinerary with flights, hotels, and activities just for you.
-              </p>
-              <div className="mt-8 space-y-3">
-                <p className="text-sm layla-text-secondary font-medium">Try asking:</p>
-                <div className="space-y-2">
-                  <div className="layla-card rounded-lg p-3 text-left">
-                    <p className="text-sm layla-text-primary">"Plan me a 5-day trip to Paris under $2000"</p>
-                  </div>
-                  <div className="layla-card rounded-lg p-3 text-left">
-                    <p className="text-sm layla-text-primary">"Find a romantic getaway to Rome"</p>
-                  </div>
-                  <div className="layla-card rounded-lg p-3 text-left">
-                    <p className="text-sm layla-text-primary">"Plan a family trip to Tokyo for 7 days"</p>
+        {(() => {
+          switch (conversationPhase) {
+            case 'initial':
+              return (
+                <div className="flex-1 flex items-center justify-center">
+                  <div className="text-center max-w-md mx-auto px-6">
+                    <div className="w-24 h-24 layla-gradient rounded-full flex items-center justify-center mx-auto mb-6">
+                      <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <h2 className="text-2xl font-semibold layla-text-primary layla-heading mb-4">
+                      Ready to Plan Your Trip?
+                    </h2>
+                    <p className="layla-text-secondary text-lg leading-relaxed">
+                      Tell me where you'd like to go and I'll create a personalized itinerary with flights, hotels, and activities just for you.
+                    </p>
+                    <div className="mt-8 space-y-3">
+                      <p className="text-sm layla-text-secondary font-medium">Try asking:</p>
+                      <div className="space-y-2">
+                        <div className="layla-card rounded-lg p-3 text-left">
+                          <p className="text-sm layla-text-primary">"Plan me a 5-day trip to Paris under $2000"</p>
+                        </div>
+                        <div className="layla-card rounded-lg p-3 text-left">
+                          <p className="text-sm layla-text-primary">"Find a romantic getaway to Rome"</p>
+                        </div>
+                        <div className="layla-card rounded-lg p-3 text-left">
+                          <p className="text-sm layla-text-primary">"Plan a family trip to Tokyo for 7 days"</p>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </div>
-          </div>
-        )}
+              );
+            
+            case 'follow_up':
+              return <DesigningTrip />;
+            
+            case 'generating':
+              return <TripPlanSkeleton loadingStage={loadingStage} />;
+            
+            case 'complete':
+              return currentTripPlan ? (
+                <div className="h-full overflow-y-auto scrollbar-hide">
+                  <TripPlan 
+                    tripData={currentTripPlan} 
+                    onBookTrip={() => console.log('Book trip clicked')}
+                  />
+                </div>
+              ) : (
+                <DesigningTrip />
+              );
+            
+            default:
+              return <DesigningTrip />;
+          }
+        })()}
       </div>
     </div>
   );
