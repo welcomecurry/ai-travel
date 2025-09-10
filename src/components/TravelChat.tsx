@@ -5,6 +5,7 @@ import TripPlan, { TripPlanData } from './TripPlan';
 import TripPlanSkeleton from './TripPlanSkeleton';
 import DesigningTrip from './DesigningTrip';
 import TypewriterText from './TypewriterText';
+import IncrementalTripPlan from './IncrementalTripPlan';
 
 interface Message {
   id: string;
@@ -17,6 +18,7 @@ interface Message {
 }
 
 type ConversationPhase = 'initial' | 'follow_up' | 'generating' | 'complete';
+type LoadingPhase = 'idle' | 'analyzing' | 'flights' | 'hotels' | 'activities' | 'complete';
 
 interface LoadingStage {
   stage: 'searching' | 'flights' | 'hotels' | 'activities' | 'itinerary' | 'complete';
@@ -112,6 +114,8 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [conversationPhase, setConversationPhase] = useState<ConversationPhase>('initial');
+  const [loadingPhase, setLoadingPhase] = useState<LoadingPhase>('idle');
+  const [phaseMessage, setPhaseMessage] = useState<string>('');
   const [loadingStage, setLoadingStage] = useState<LoadingStage>({ stage: 'searching', message: 'Analyzing your request...' });
   const [currentTripPlan, setCurrentTripPlan] = useState<TripPlanData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -170,48 +174,53 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
     }
   };
 
-  const simulateLoadingStages = () => {
-    const stages = [
-      { stage: 'searching' as const, message: 'Analyzing your request...', delay: 1000 },
-      { stage: 'flights' as const, message: 'Finding best flights...', delay: 1500 },
-      { stage: 'hotels' as const, message: 'Searching hotels...', delay: 1200 },
-      { stage: 'activities' as const, message: 'Curating activities...', delay: 1300 },
-      { stage: 'itinerary' as const, message: 'Creating your itinerary...', delay: 1000 }
+  const simulateIncrementalLoading = (tripData?: TripPlanData) => {
+    const phases = [
+      { phase: 'analyzing' as LoadingPhase, message: 'Analyzing your request...', delay: 2000 },
+      { phase: 'flights' as LoadingPhase, message: 'Finding best flights...', delay: 2500 },
+      { phase: 'hotels' as LoadingPhase, message: 'Searching hotels...', delay: 2200 },
+      { phase: 'activities' as LoadingPhase, message: 'Planning activities...', delay: 2800 },
+      { phase: 'complete' as LoadingPhase, message: 'Complete!', delay: 1000 }
     ];
 
     let currentIndex = 0;
-    const runNextStage = () => {
-      if (currentIndex < stages.length) {
-        const stage = stages[currentIndex];
-        setLoadingStage(stage);
+    
+    const runNextPhase = () => {
+      if (currentIndex < phases.length) {
+        const currentPhase = phases[currentIndex];
+        setLoadingPhase(currentPhase.phase);
+        setPhaseMessage(currentPhase.message);
+        
+        // If we have trip data and we're past analyzing, set it
+        if (tripData && currentPhase.phase !== 'analyzing') {
+          setCurrentTripPlan(tripData);
+        }
+        
         setTimeout(() => {
           currentIndex++;
-          runNextStage();
-        }, stage.delay);
+          runNextPhase();
+        }, currentPhase.delay);
+      } else {
+        // All phases complete
+        setIsLoading(false);
+        setConversationPhase('complete');
       }
     };
 
-    runNextStage();
+    runNextPhase();
   };
 
   const showThinkingMessages = (userMessage: string) => {
-    // Extract key details for thinking messages
-    const isLondon = userMessage.toLowerCase().includes('london');
-    const destination = isLondon ? 'London' : 'your destination';
-    const origin = 'NYC'; // Default, could be extracted from message
+    // Start the generating phase and incremental loading immediately
+    setConversationPhase('generating');
+    setLoadingPhase('analyzing');
+    setPhaseMessage('Analyzing your preferences...');
     
-    const thinkingMessages = [
-      `🤔 Analyzing your preferences...`,
-      `✈️ Finding best flights from ${origin} to ${destination}...`,
-      `🏨 Searching top hotels in ${destination}...`,
-      `🗺️ Crafting your perfect itinerary...`
-    ];
-
     // Create a single thinking message that will be updated
     const thinkingMessageId = Date.now().toString() + '-thinking';
     const initialThinkingMessage: Message = {
       id: thinkingMessageId,
-      content: thinkingMessages[0],
+      content: '🤔 Analyzing your preferences...',
       sender: 'ai',
       timestamp: new Date(),
       type: 'text',
@@ -220,26 +229,11 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
 
     setMessages(prev => [...prev, initialThinkingMessage]);
 
-    let messageIndex = 1;
-
-    const updateThinkingMessage = () => {
-      if (messageIndex < thinkingMessages.length) {
-        setMessages(prev => prev.map(msg => 
-          msg.id === thinkingMessageId 
-            ? { ...msg, content: thinkingMessages[messageIndex] }
-            : msg
-        ));
-        messageIndex++;
-        setTimeout(updateThinkingMessage, 2500);
-      } else {
-        // Start the actual API call after all thinking updates
-        setTimeout(() => {
-          handleAPICall(userMessage, thinkingMessageId);
-        }, 1000);
-      }
-    };
-
-    setTimeout(updateThinkingMessage, 2500);
+    // Start the actual API call immediately - no need to show multiple thinking messages
+    // The incremental loading will handle the visual feedback
+    setTimeout(() => {
+      handleAPICall(userMessage, thinkingMessageId);
+    }, 1500);
   };
 
   const handleAPICall = async (message: string, thinkingMessageId?: string) => {
@@ -328,17 +322,11 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
           }
           
         } else if (responseData.type === 'trip_plan') {
-          // This is a complete trip plan - set data and move to complete phase
-          setCurrentTripPlan(responseData);
-          setConversationPhase('complete');
-          
-          // Start loading stages for right column
-          simulateLoadingStages();
-          
-          const confirmContent = `Perfect! I've crafted an amazing ${responseData.duration || 'trip'} ${responseData.destination || 'adventure'} just for you! ✨\n\nI found some fantastic flights, handpicked beautiful hotels, and curated an incredible itinerary with the best activities. Your trip plan is now ready on the right - check it out! 🎉\n\nFeel free to ask me to adjust anything or add special requests. I'm here to make your trip absolutely perfect! 😊`;
+          // This is a complete trip plan - start incremental loading
+          const confirmContent = `Perfect! I've crafted an amazing ${responseData.duration || 'trip'} to ${responseData.destination || 'your destination'} just for you! ✨\n\nI'm now building your personalized itinerary step by step. Watch the right side as I find flights, select hotels, and plan activities!`;
           
           if (thinkingMessageId) {
-            // Update the existing thinking message with final response
+            // Update the existing thinking message with confirmation
             setMessages(prev => prev.map(msg => 
               msg.id === thinkingMessageId 
                 ? { ...msg, content: confirmContent, isTyping: true, type: 'text' }
@@ -356,6 +344,9 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
             };
             setMessages(prev => [...prev, confirmMessage]);
           }
+          
+          // Start incremental loading with the trip data
+          simulateIncrementalLoading(responseData);
         } else {
           // Fallback to text message - but check if it's JSON first
           let displayContent = accumulatedContent || 'I received your message and I\'m working on a response.';
@@ -407,7 +398,11 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
       };
       setMessages(prev => [...prev, errorMessage]);
     } finally {
-      setIsLoading(false);
+      // Don't set isLoading to false here if we're in incremental loading mode
+      // The incremental loading will handle this
+      if (loadingPhase === 'idle' || loadingPhase === 'analyzing') {
+        setIsLoading(false);
+      }
       setLoadingStage({ stage: 'complete', message: 'Complete!' });
     }
   };
@@ -600,18 +595,13 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
               return <DesigningTrip />;
             
             case 'generating':
-              return <TripPlanSkeleton loadingStage={loadingStage} />;
-            
             case 'complete':
-              return currentTripPlan ? (
-                <div className="h-full overflow-y-auto scrollbar-hide">
-                  <TripPlan 
-                    tripData={currentTripPlan} 
-                    onBookTrip={() => console.log('Book trip clicked')}
-                  />
-                </div>
-              ) : (
-                <DesigningTrip />
+              return (
+                <IncrementalTripPlan
+                  loadingPhase={loadingPhase}
+                  tripData={currentTripPlan || undefined}
+                  phaseMessage={phaseMessage}
+                />
               );
             
             default:

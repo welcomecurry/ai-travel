@@ -186,3 +186,4 @@ const TripPlanSkeleton: React.FC<TripPlanSkeletonProps> = ({ loadingStage }) => 
 };
 
 export default TripPlanSkeleton;
+
