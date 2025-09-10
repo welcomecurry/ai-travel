@@ -7,13 +7,15 @@ interface TypewriterTextProps {
   speed?: number;
   onComplete?: () => void;
   className?: string;
+  isLoading?: boolean;
 }
 
 const TypewriterText: React.FC<TypewriterTextProps> = ({ 
   text, 
-  speed = 50, 
+  speed = 25, 
   onComplete,
-  className = '' 
+  className = '',
+  isLoading = false
 }) => {
   const [displayedText, setDisplayedText] = useState('');
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -65,6 +67,13 @@ const TypewriterText: React.FC<TypewriterTextProps> = ({
           __html: formatText(displayedText) + (showCursor && currentIndex < text.length ? '<span class="animate-pulse">|</span>' : '') 
         }} 
       />
+      {isLoading && (
+        <span className="ml-2">
+          <span className="animate-pulse">•</span>
+          <span className="animate-pulse" style={{ animationDelay: '0.2s' }}>•</span>
+          <span className="animate-pulse" style={{ animationDelay: '0.4s' }}>•</span>
+        </span>
+      )}
     </span>
   );
 };

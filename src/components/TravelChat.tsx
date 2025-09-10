@@ -36,7 +36,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
     >
       {!isUser && (
         <div className="flex-shrink-0 mr-4">
-          <div className="w-10 h-10 layla-gradient rounded-full flex items-center justify-center layla-shadow-soft">
+          <div className="w-10 h-10 layla-gradient rounded-full flex items-center justify-center shadow-sm">
             <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
               <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
@@ -45,28 +45,38 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
       )}
       
       <div className="flex flex-col max-w-lg">
-        <div className={`px-6 py-4 rounded-2xl break-words ${
+        <div className={`px-5 py-4 rounded-2xl break-words ${
           isUser 
-            ? 'layla-gradient text-white rounded-br-lg layla-shadow-soft' 
-            : 'bg-white border border-gray-100 layla-text-primary rounded-bl-lg layla-shadow-soft'
+            ? 'layla-gradient text-white rounded-br-lg shadow-sm' 
+            : 'bg-gray-50 border border-gray-100 text-gray-700 rounded-bl-lg shadow-sm'
         }`}>
           {message.isTyping ? (
-            <TypewriterText 
-              text={message.content}
-              speed={30}
-              className="text-sm leading-relaxed font-medium"
-            />
+            <>
+              <TypewriterText 
+                text={message.content || ''}
+                speed={25}
+                className="text-sm leading-relaxed font-normal"
+                isLoading={message.content?.includes('...') || false}
+              />
+              {message.content?.includes('...') && (
+                <div className="mt-3 mb-1">
+                  <div className="w-full bg-gray-200 rounded-full h-1">
+                    <div className="bg-teal-500 h-1 rounded-full animate-pulse" style={{ width: '45%', transition: 'width 2s ease-in-out' }}></div>
+                  </div>
+                </div>
+              )}
+            </>
           ) : (
             <div 
-              className="text-sm leading-relaxed font-medium"
+              className="text-sm leading-relaxed font-normal"
               dangerouslySetInnerHTML={{ 
-                __html: message.content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br />') 
+                __html: (message.content || '').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br />') 
               }}
             />
           )}
         </div>
         <p className={`text-xs mt-2 px-2 ${
-          isUser ? 'text-gray-400 text-right' : 'layla-text-secondary'
+          isUser ? 'text-gray-400 text-right' : 'text-gray-500'
         }`}>
           {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </p>
@@ -74,8 +84,8 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
       
       {isUser && (
         <div className="flex-shrink-0 ml-4">
-          <div className="w-10 h-10 bg-gray-400 rounded-full flex items-center justify-center layla-shadow-soft">
-            <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
+          <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center shadow-sm">
+            <svg className="w-6 h-6 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
             </svg>
           </div>
@@ -121,16 +131,21 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
     if (initialMessage && !isLoading && conversationPhase === 'initial') {
       setInputValue(initialMessage);
       // Auto-send the initial message after a brief delay
-      setTimeout(() => {
+      const timeoutId = setTimeout(() => {
         if (initialMessage.trim()) {
           const userMessage: Message = {
-            id: Date.now().toString(),
+            id: 'initial-user-' + Date.now().toString(),
             content: initialMessage.trim(),
             sender: 'user',
             timestamp: new Date(),
             type: 'text'
           };
-          setMessages(prev => [...prev, userMessage]);
+          setMessages(prev => {
+            // Prevent duplicate initial messages
+            const hasInitialMessage = prev.some(msg => msg.id.startsWith('initial-user-'));
+            if (hasInitialMessage) return prev;
+            return [...prev, userMessage];
+          });
           setInputValue('');
           setError(null);
           setIsLoading(true);
@@ -140,8 +155,10 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
           handleAPICall(initialMessage.trim());
         }
       }, 500);
+
+      return () => clearTimeout(timeoutId);
     }
-  }, [initialMessage, conversationPhase]);
+  }, [initialMessage]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInputValue(e.target.value);
@@ -177,7 +194,62 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
     runNextStage();
   };
 
-  const handleAPICall = async (message: string) => {
+  const showThinkingMessages = (userMessage: string) => {
+    // Extract key details for thinking messages
+    const isLondon = userMessage.toLowerCase().includes('london');
+    const destination = isLondon ? 'London' : 'your destination';
+    const origin = 'NYC'; // Default, could be extracted from message
+    
+    const thinkingMessages = [
+      `🤔 Analyzing your preferences...`,
+      `✈️ Finding best flights from ${origin} to ${destination}...`,
+      `🏨 Searching top hotels in ${destination}...`,
+      `🗺️ Crafting your perfect itinerary...`
+    ];
+
+    // Create a single thinking message that will be updated
+    const thinkingMessageId = Date.now().toString() + '-thinking';
+    const initialThinkingMessage: Message = {
+      id: thinkingMessageId,
+      content: thinkingMessages[0],
+      sender: 'ai',
+      timestamp: new Date(),
+      type: 'text',
+      isTyping: true
+    };
+
+    setMessages(prev => [...prev, initialThinkingMessage]);
+
+    let messageIndex = 1;
+
+    const updateThinkingMessage = () => {
+      if (messageIndex < thinkingMessages.length) {
+        setMessages(prev => prev.map(msg => 
+          msg.id === thinkingMessageId 
+            ? { ...msg, content: thinkingMessages[messageIndex] }
+            : msg
+        ));
+        messageIndex++;
+        setTimeout(updateThinkingMessage, 2500);
+      } else {
+        // Start the actual API call after all thinking updates
+        setTimeout(() => {
+          handleAPICall(userMessage, thinkingMessageId);
+        }, 1000);
+      }
+    };
+
+    setTimeout(updateThinkingMessage, 2500);
+  };
+
+  const handleAPICall = async (message: string, thinkingMessageId?: string) => {
+    // Validate message input
+    if (!message || typeof message !== 'string' || !message.trim()) {
+      setError('Please enter a valid message');
+      setIsLoading(false);
+      return;
+    }
+
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
@@ -186,7 +258,13 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
         },
         body: JSON.stringify({
           message: message,
-          conversationHistory: messages.slice(-10),
+          conversationHistory: messages
+            .slice(-10)
+            .filter(msg => msg && msg.content && typeof msg.content === 'string' && msg.content.trim())
+            .map(msg => ({
+              sender: msg.sender,
+              content: msg.content.trim()
+            })),
         }),
       });
 
@@ -229,36 +307,67 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
         
         if (responseData.type === 'follow_up') {
           // This is a follow-up response - stay in follow_up phase
-          const followUpMessage: Message = {
-            id: Date.now().toString() + '-followup',
-            content: responseData.message,
-            sender: 'ai',
-            timestamp: new Date(),
-            type: 'follow_up',
-            isTyping: true
-          };
-          setMessages(prev => [...prev, followUpMessage]);
+          if (thinkingMessageId) {
+            // Update the existing thinking message
+            setMessages(prev => prev.map(msg => 
+              msg.id === thinkingMessageId 
+                ? { ...msg, content: responseData.message || 'Processing your request...', isTyping: true, type: 'follow_up' }
+                : msg
+            ));
+          } else {
+            // Add new message if no thinking message exists
+            const followUpMessage: Message = {
+              id: Date.now().toString() + '-followup',
+              content: responseData.message || 'I need some more information to help you better.',
+              sender: 'ai',
+              timestamp: new Date(),
+              type: 'follow_up',
+              isTyping: true
+            };
+            setMessages(prev => [...prev, followUpMessage]);
+          }
           
         } else if (responseData.type === 'trip_plan') {
           // This is a complete trip plan - set data and move to complete phase
           setCurrentTripPlan(responseData);
           setConversationPhase('complete');
           
-          // Add AI confirmation message
-          const confirmMessage: Message = {
-            id: Date.now().toString() + '-confirm',
-            content: `I've created a ${responseData.duration} itinerary for ${responseData.destination}! Check out your trip plan on the right. Let me know if you'd like me to adjust anything.`,
-            sender: 'ai',
-            timestamp: new Date(),
-            type: 'text',
-            isTyping: true
-          };
-          setMessages(prev => [...prev, confirmMessage]);
+          // Start loading stages for right column
+          simulateLoadingStages();
+          
+          const confirmContent = `Perfect! I've crafted an amazing ${responseData.duration || 'trip'} ${responseData.destination || 'adventure'} just for you! ✨\n\nI found some fantastic flights, handpicked beautiful hotels, and curated an incredible itinerary with the best activities. Your trip plan is now ready on the right - check it out! 🎉\n\nFeel free to ask me to adjust anything or add special requests. I'm here to make your trip absolutely perfect! 😊`;
+          
+          if (thinkingMessageId) {
+            // Update the existing thinking message with final response
+            setMessages(prev => prev.map(msg => 
+              msg.id === thinkingMessageId 
+                ? { ...msg, content: confirmContent, isTyping: true, type: 'text' }
+                : msg
+            ));
+          } else {
+            // Add new message if no thinking message exists
+            const confirmMessage: Message = {
+              id: Date.now().toString() + '-confirm',
+              content: confirmContent,
+              sender: 'ai',
+              timestamp: new Date(),
+              type: 'text',
+              isTyping: true
+            };
+            setMessages(prev => [...prev, confirmMessage]);
+          }
         } else {
-          // Fallback to text message
+          // Fallback to text message - but check if it's JSON first
+          let displayContent = accumulatedContent || 'I received your message and I\'m working on a response.';
+          
+          // If content looks like JSON, show a generic message instead
+          if (accumulatedContent && (accumulatedContent.trim().startsWith('{') || accumulatedContent.trim().startsWith('['))) {
+            displayContent = 'I\'ve processed your request! Let me know if you need any adjustments or have other questions.';
+          }
+          
           const textMessage: Message = {
             id: Date.now().toString() + '-text',
-            content: accumulatedContent,
+            content: displayContent,
             sender: 'ai',
             timestamp: new Date(),
             type: 'text'
@@ -267,9 +376,16 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
         }
       } catch (parseError) {
         // If JSON parsing fails, treat as regular text message
+        let displayContent = accumulatedContent || 'I received your request, but I\'m having trouble processing it right now. Please try again.';
+        
+        // If content looks like JSON, show a generic message instead
+        if (accumulatedContent && (accumulatedContent.trim().startsWith('{') || accumulatedContent.trim().startsWith('['))) {
+          displayContent = 'I\'ve processed your request, but there was a formatting issue. Please try asking again.';
+        }
+        
         const textMessage: Message = {
           id: Date.now().toString() + '-text',
-          content: accumulatedContent || 'I received your request, but I\'m having trouble processing it right now. Please try again.',
+          content: displayContent,
           sender: 'ai',
           timestamp: new Date(),
           type: 'text'
@@ -319,17 +435,20 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
       textareaRef.current.style.height = 'auto';
     }
 
-    // If we're in follow_up phase and user is providing details, move to generating phase
+    // If we're in follow_up phase and user is providing details, show thinking messages
     if (conversationPhase === 'follow_up') {
       // Check if this looks like detailed information (has numbers, dates, etc.)
       const hasDetails = /\d/.test(currentInput) || currentInput.split(' ').length > 10;
       if (hasDetails) {
         setConversationPhase('generating');
-        simulateLoadingStages();
+        // Show thinking messages instead of direct API call
+        showThinkingMessages(currentInput);
+        setIsLoading(false); // Reset loading since thinking messages handle it
+        return;
       }
     }
 
-    // Make API call
+    // Make API call for other phases
     await handleAPICall(currentInput);
   };
 
@@ -361,9 +480,11 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
 
         {/* Chat Messages */}
         <div className="flex-1 overflow-y-auto px-6 py-6 space-y-4 scrollbar-hide">
-          {messages.map((message) => (
-            <MessageBubble key={message.id} message={message} />
-          ))}
+          {messages
+            .filter(message => message && message.content !== undefined && message.id)
+            .map((message) => (
+              <MessageBubble key={message.id} message={message} />
+            ))}
 
           {/* Error message */}
           {error && (
@@ -395,11 +516,11 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Chat Input - Layla.ai Style */}
-        <div className="bg-white border-t border-gray-100 px-6 py-6">
+        {/* Chat Input - Exact Layla.ai Style */}
+        <div className="bg-white border-t border-gray-100 px-6 py-4">
           <div className="relative">
-            <div className="bg-white border border-gray-200 rounded-2xl layla-shadow-soft focus-within:border-teal-500 focus-within:ring-4 focus-within:ring-teal-100 transition-all duration-200">
-              <div className="flex items-end">
+            <div className="bg-white border border-gray-200 rounded-2xl layla-shadow-soft focus-within:border-teal-400 focus-within:ring-2 focus-within:ring-teal-100 transition-all duration-200">
+              <div className="flex items-center pr-2">
                 <div className="flex-1 relative">
                   <textarea
                     ref={textareaRef}
@@ -407,33 +528,31 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
                     onChange={handleInputChange}
                     onKeyPress={handleKeyPress}
                     placeholder="Where would you like to go?"
-                    className="w-full px-6 py-4 bg-transparent border-none resize-none focus:outline-none text-base leading-relaxed font-medium layla-text-primary placeholder:layla-text-secondary min-h-[56px] max-h-[120px]"
+                    className="w-full px-4 py-3 bg-transparent border-none resize-none focus:outline-none text-sm leading-relaxed font-normal text-gray-800 placeholder:text-gray-400 min-h-[44px] max-h-[120px]"
                     rows={1}
                     disabled={isLoading}
                   />
                 </div>
-                <div className="p-2">
-                  <button
-                    onClick={handleSend}
-                    disabled={!inputValue.trim() || isLoading}
-                    className="w-12 h-12 layla-gradient rounded-xl flex items-center justify-center transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 layla-shadow-soft"
-                  >
-                    {isLoading ? (
-                      <svg className="w-6 h-6 animate-spin text-white" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="m100-200c0-8.284-6.716-15-15-15-8.284 0-15 6.716-15 15 0 8.284 6.716 15 15 15 8.284 0 15-6.716 15-15zm-1.5 0c0 7.456-6.044 13.5-13.5 13.5-7.456 0-13.5-6.044-13.5-13.5 0-7.456 6.044-13.5 13.5-13.5 7.456 0 13.5 6.044 13.5 13.5z"></path>
-                      </svg>
-                    ) : (
-                      <svg 
-                        className="w-6 h-6 transform rotate-45 text-white" 
-                        fill="currentColor" 
-                        viewBox="0 0 20 20"
-                      >
-                        <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
-                      </svg>
-                    )}
-                  </button>
-                </div>
+                <button
+                  onClick={handleSend}
+                  disabled={!inputValue.trim() || isLoading}
+                  className="w-8 h-8 layla-gradient rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex-shrink-0"
+                >
+                  {isLoading ? (
+                    <svg className="w-4 h-4 animate-spin text-white" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="m100-200c0-8.284-6.716-15-15-15-8.284 0-15 6.716-15 15 0 8.284 6.716 15 15 15 8.284 0 15-6.716 15-15zm-1.5 0c0 7.456-6.044 13.5-13.5 13.5-7.456 0-13.5-6.044-13.5-13.5 0-7.456 6.044-13.5 13.5-13.5 7.456 0 13.5 6.044 13.5 13.5z"></path>
+                    </svg>
+                  ) : (
+                    <svg 
+                      className="w-4 h-4 text-white" 
+                      fill="currentColor" 
+                      viewBox="0 0 24 24"
+                    >
+                      <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                    </svg>
+                  )}
+                </button>
               </div>
             </div>
           </div>

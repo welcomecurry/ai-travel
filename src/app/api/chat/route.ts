@@ -86,8 +86,9 @@ Rules:
 3. Create 5-7 days of itinerary with 2-3 activities per day
 4. Calculate realistic total costs based on the provided data
 5. Include practical time estimates for activities
-6. Never add explanatory text outside the JSON structure
+6. IMPORTANT: For trip plans, ONLY return the JSON structure - no explanatory text, no conversational language, just pure JSON
 7. Ensure all JSON is valid and properly formatted
+8. The frontend will handle displaying a human-readable confirmation message
 
 CRITICAL: Always determine if this is an initial request needing follow-up or a detailed request ready for trip planning.`;
 
@@ -95,9 +96,9 @@ export async function POST(request: NextRequest) {
   try {
     const { message, conversationHistory = [] } = await request.json();
 
-    if (!message) {
+    if (!message || typeof message !== 'string' || !message.trim()) {
       return NextResponse.json(
-        { error: 'Message is required' },
+        { error: 'Valid message content is required' },
         { status: 400 }
       );
     }
@@ -150,11 +151,13 @@ Use this EXACT data in your response. Reference specific flights, hotels, and ac
         role: 'system' as const,
         content: systemPromptWithData,
       },
-      // Include previous conversation history
-      ...conversationHistory.map((msg: any) => ({
-        role: msg.sender === 'user' ? 'user' as const : 'assistant' as const,
-        content: msg.content,
-      })),
+      // Include previous conversation history (filtered and sanitized)
+      ...conversationHistory
+        .filter((msg: any) => msg && msg.content && typeof msg.content === 'string' && msg.content.trim())
+        .map((msg: any) => ({
+          role: msg.sender === 'user' ? 'user' as const : 'assistant' as const,
+          content: msg.content.trim(),
+        })),
       // Add the current user message
       {
         role: 'user' as const,

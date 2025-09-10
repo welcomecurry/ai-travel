@@ -40,7 +40,7 @@ const TravelApp: React.FC = () => {
             appState === 'transitioning' ? 'animate-slide-out-left' : 'animate-fade-in-up'
           }`}
         >
-          <Landing onStartChat={handleStartChat} />
+          <Landing onSendMessage={handleStartChat} />
         </div>
       )}
 
