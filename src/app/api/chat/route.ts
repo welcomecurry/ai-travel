@@ -83,14 +83,24 @@ For DETAILED requests (with sufficient information), respond with structured JSO
 Rules:
 1. For follow-up responses: Be conversational, friendly, and match the tone shown in the example
 2. For trip plans: Use the provided travel data EXACTLY - copy airline names, hotel names, prices, and activity details precisely
-3. Create 5-7 days of itinerary with 2-3 activities per day
+3. CRITICAL: Match the EXACT number of days requested by the user. If they ask for 7 days, provide Day 1 through Day 7. If they ask for 3 days, provide Day 1 through Day 3. Include 2-3 activities per day.
 4. Calculate realistic total costs based on the provided data
 5. Include practical time estimates for activities
 6. IMPORTANT: For trip plans, ONLY return the JSON structure - no explanatory text, no conversational language, just pure JSON
 7. Ensure all JSON is valid and properly formatted
 8. The frontend will handle displaying a human-readable confirmation message
+9. STREAMING TEXT: Only use plain text responses (no JSON) for general travel advice, tips, or casual conversation that doesn't require structured data
+10. ALWAYS use JSON for follow-up questions and trip plans - this is critical for the UI to function properly
 
-CRITICAL: Always determine if this is an initial request needing follow-up or a detailed request ready for trip planning.`;
+CRITICAL: Always determine if this is an initial request needing follow-up or a detailed request ready for trip planning.
+
+RESPONSE FORMAT DECISION TREE:
+- If user needs more details for planning → JSON follow_up response
+- If user provides complete trip details → JSON trip_plan response  
+- If user asks general travel questions/advice → Plain text streaming response
+- If user wants tips, recommendations, or casual chat → Plain text streaming response
+
+NEVER use plain text responses for trip planning or follow-up questions - the UI depends on JSON structure!`;
 
 export async function POST(request: NextRequest) {
   try {
@@ -112,8 +122,32 @@ export async function POST(request: NextRequest) {
 
     // Parse travel request and search for relevant data
     const searchCriteria = parseTravelRequest(message);
+    
+    // Extract duration from the user's message
+    const extractDuration = (text: string): number | null => {
+      const patterns = [
+        /(\d+)\s*days?/i,
+        /(\d+)\s*day\s*trip/i,
+        /(\d+)\s*-?\s*day/i,
+      ];
+      
+      for (const pattern of patterns) {
+        const match = text.match(pattern);
+        if (match) {
+          return parseInt(match[1]);
+        }
+      }
+      return null;
+    };
+    
+    const requestedDays = extractDuration(message);
     let travelData = '';
     let systemPromptWithData = TRAVEL_AGENT_SYSTEM_PROMPT;
+    
+    // Add duration-specific instruction to system prompt
+    if (requestedDays) {
+      systemPromptWithData += `\n\nIMPORTANT DURATION REQUIREMENT: The user has specifically requested a ${requestedDays}-day trip. You MUST create exactly ${requestedDays} days of itinerary (Day 1 through Day ${requestedDays}). Do not create more or fewer days than requested.`;
+    }
 
     // If this looks like a travel request, get actual data
     if (searchCriteria.destination) {
@@ -168,7 +202,7 @@ Use this EXACT data in your response. Reference specific flights, hotels, and ac
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o',
       messages,
-      max_tokens: 1000,
+      max_tokens: 10000, // Increased for longer itineraries (7+ days)
       temperature: 0.7,
       stream: true,
     });
@@ -179,12 +213,23 @@ Use this EXACT data in your response. Reference specific flights, hotels, and ac
         const encoder = new TextEncoder();
         
         try {
+          let fullResponse = '';
           for await (const chunk of completion) {
             const content = chunk.choices[0]?.delta?.content || '';
             if (content) {
+              fullResponse += content;
               const data = JSON.stringify({ content });
               controller.enqueue(encoder.encode(`data: ${data}\n\n`));
             }
+          }
+          
+          // Debug: Log the complete response to check for truncation
+          console.log('🔍 Complete API Response Length:', fullResponse.length);
+          console.log('🔍 Response ends with:', fullResponse.slice(-100));
+          
+          // Check if response looks like truncated JSON
+          if (fullResponse.trim().startsWith('{') && !fullResponse.trim().endsWith('}')) {
+            console.warn('⚠️ Response appears to be truncated JSON - increase max_tokens');
           }
         } catch (error) {
           console.error('Streaming error:', error);

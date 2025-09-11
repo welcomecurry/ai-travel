@@ -2,7 +2,9 @@
 
 import React from 'react';
 import { TripPlanData } from './TripPlan';
-import { getDestinationImage, getGradientFallback, AIRLINE_LOGOS, HOTEL_AMENITIES, ACTIVITY_ICONS } from '../lib/destinationImages';
+import { getDestinationImage, getGradientFallback, getUnsplashImageUrl, getHotelImageUrl, getActivityImageUrl, AIRLINE_LOGOS, HOTEL_AMENITIES, ACTIVITY_ICONS } from '../lib/destinationImages';
+import { SectionLoadingState } from '../lib/queryDetection';
+import ImageWithFallback from './ImageWithFallback';
 
 type LoadingPhase = 'idle' | 'analyzing' | 'flights' | 'hotels' | 'activities' | 'complete';
 
@@ -10,13 +12,30 @@ interface IncrementalTripPlanProps {
   loadingPhase: LoadingPhase;
   tripData?: TripPlanData;
   phaseMessage: string;
+  sectionLoadingStates?: SectionLoadingState[];
+  isFollowUpQuery?: boolean;
 }
 
 const IncrementalTripPlan: React.FC<IncrementalTripPlanProps> = ({ 
   loadingPhase, 
   tripData, 
-  phaseMessage 
+  phaseMessage,
+  sectionLoadingStates = [],
+  isFollowUpQuery = false
 }) => {
+  
+  // Helper function to check if a section is loading
+  const isSectionLoading = (section: 'hotels' | 'flights' | 'activities'): boolean => {
+    const isLoading = sectionLoadingStates.some(state => state.section === section && state.isLoading);
+    console.log(`🔍 Checking ${section} loading state:`, { isLoading, sectionLoadingStates });
+    return isLoading;
+  };
+  
+  // Helper function to get section loading message
+  const getSectionLoadingMessage = (section: 'hotels' | 'flights' | 'activities'): string => {
+    const state = sectionLoadingStates.find(state => state.section === section && state.isLoading);
+    return state?.message || '';
+  };
   const renderDestinationHeader = () => {
     if (loadingPhase === 'analyzing' || !tripData) {
       return (
@@ -51,21 +70,14 @@ const IncrementalTripPlan: React.FC<IncrementalTripPlanProps> = ({
     return (
       <div className="relative h-80 overflow-hidden rounded-t-2xl">
         {/* Hero background image or gradient */}
-        {destinationImage ? (
-          <>
-            <img 
-              src={destinationImage.url} 
-              alt={destinationImage.alt}
-              className="absolute inset-0 w-full h-full object-cover"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-black/10" />
-          </>
-        ) : (
-          <>
-            <div className={`absolute inset-0 ${gradientFallback}`} />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/20 to-transparent" />
-          </>
-        )}
+        <ImageWithFallback
+          src={destinationImage?.url || getUnsplashImageUrl(tripData.destination, 1920, 1080)}
+          alt={destinationImage?.alt || `${tripData.destination} cityscape`}
+          className="absolute inset-0 w-full h-full object-cover"
+          fallbackGradient={gradientFallback}
+          showShimmer={true}
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-black/10" />
         
         {/* Content overlay */}
         <div className="relative h-full flex flex-col justify-end p-8">
@@ -103,8 +115,57 @@ const IncrementalTripPlan: React.FC<IncrementalTripPlanProps> = ({
   };
 
   const renderFlightSection = () => {
+    const isFlightLoading = isSectionLoading('flights');
+    const flightLoadingMessage = getSectionLoadingMessage('flights');
+    
+    // Show targeted loading for follow-up queries
+    if (isFollowUpQuery && isFlightLoading && tripData?.flights) {
+      return (
+        <div className="p-6 pb-8">
+          <div className="bg-white rounded-2xl shadow-lg p-8 transition-all duration-500">
+            <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center">
+                <div className="bg-blue-50 text-blue-600 p-3 rounded-xl mr-4">
+                  ✈️
+                </div>
+                <h2 className="text-2xl font-bold text-gray-900">Flight Options</h2>
+              </div>
+              <div className="flex items-center bg-orange-50 text-orange-600 px-4 py-2 rounded-full">
+                <div className="flex items-center">
+                  <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse mr-1"></div>
+                  <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse mr-1" style={{ animationDelay: '0.2s' }}></div>
+                  <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse mr-2" style={{ animationDelay: '0.4s' }}></div>
+                </div>
+                <span className="font-medium text-sm">{flightLoadingMessage.replace('✈️ ', '')}</span>
+              </div>
+            </div>
+            <div className="space-y-4">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="border border-gray-100 rounded-xl p-6 animate-pulse opacity-60">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-4 flex-1">
+                      <div className="w-12 h-12 bg-gray-200 rounded-full"></div>
+                      <div className="flex-1">
+                        <div className="h-5 bg-gray-200 rounded w-32 mb-2"></div>
+                        <div className="h-4 bg-gray-200 rounded w-48 mb-2"></div>
+                        <div className="h-3 bg-gray-200 rounded w-24"></div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="h-8 bg-gray-200 rounded w-20 mb-1"></div>
+                      <div className="h-3 bg-gray-200 rounded w-16"></div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+    
+    // Initial loading state
     if (loadingPhase === 'flights' && (!tripData || !tripData.flights)) {
-      // Show skeleton while loading flights
       return (
         <div className="p-6 pb-8">
           <div className="bg-white rounded-2xl shadow-lg p-8">
@@ -148,8 +209,8 @@ const IncrementalTripPlan: React.FC<IncrementalTripPlanProps> = ({
       );
     }
 
-    if (tripData && tripData.flights && loadingPhase !== 'analyzing') {
-      // Show actual flight data
+    if (tripData && tripData.flights && loadingPhase !== 'analyzing' && !isFlightLoading) {
+      // Show actual flight data (only if not currently loading)
       return (
         <div className="p-6 pb-8">
           <div className="bg-white rounded-2xl shadow-lg p-8">
@@ -225,12 +286,138 @@ const IncrementalTripPlan: React.FC<IncrementalTripPlanProps> = ({
       );
     }
 
+    // Fallback: if we have flight data but no loading state, show the data
+    if (tripData && tripData.flights && loadingPhase !== 'analyzing') {
+      console.log('🔄 Flight section fallback - showing data despite loading state');
+      return (
+        <div className="p-6 pb-8">
+          <div className="bg-white rounded-2xl shadow-lg p-8">
+            <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center">
+                <div className="bg-blue-50 text-blue-600 p-3 rounded-xl mr-4">
+                  ✈️
+                </div>
+                <h2 className="text-2xl font-bold text-gray-900">Flight Options</h2>
+              </div>
+              <div className="flex items-center bg-green-50 text-green-600 px-4 py-2 rounded-full">
+                <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                <span className="font-medium text-sm">Found!</span>
+              </div>
+            </div>
+            <div className="space-y-4">
+              {tripData.flights.map((flight) => (
+                <div key={flight.id} className="border border-gray-100 rounded-xl p-6 hover:shadow-md transition-all duration-200 hover:border-teal-200">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-6 flex-1">
+                      <div className="flex flex-col items-center">
+                        <div className="w-12 h-12 bg-gradient-to-br from-blue-50 to-teal-50 rounded-full flex items-center justify-center text-2xl mb-1">
+                          {AIRLINE_LOGOS[flight.airline] || '✈️'}
+                        </div>
+                        <span className="text-xs text-gray-500 font-medium">{flight.flightNumber}</span>
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center mb-2">
+                          <h3 className="font-bold text-lg text-gray-900 mr-3">{flight.airline}</h3>
+                          <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-md text-xs font-medium">
+                            {flight.stops === 0 ? 'Direct' : `${flight.stops} stop${flight.stops > 1 ? 's' : ''}`}
+                          </span>
+                        </div>
+                        <div className="flex items-center text-gray-600 mb-2">
+                          <span className="font-mono text-lg font-bold">{flight.route.split(' → ')[0] || 'JFK'}</span>
+                          <svg className="w-5 h-5 mx-3 text-teal-500" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
+                          </svg>
+                          <span className="font-mono text-lg font-bold">{flight.route.split(' → ')[1] || 'LHR'}</span>
+                        </div>
+                        <div className="flex items-center text-sm text-gray-500">
+                          <span className="font-medium">{flight.departureTime} - {flight.arrivalTime}</span>
+                          <span className="mx-2">•</span>
+                          <span className="font-medium">{flight.duration}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-right ml-6">
+                      <div className="text-3xl font-bold text-teal-600 mb-1">${flight.price.toLocaleString()}</div>
+                      <div className="text-sm text-gray-500 font-medium">per person</div>
+                      <button className="mt-3 bg-teal-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-teal-700 transition-colors text-sm">
+                        Select
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return null;
   };
 
   const renderHotelSection = () => {
+    const isHotelLoading = isSectionLoading('hotels');
+    const hotelLoadingMessage = getSectionLoadingMessage('hotels');
+    
+    // Show targeted loading for follow-up queries
+    if (isFollowUpQuery && isHotelLoading && tripData?.hotels) {
+      return (
+        <div className="p-6 pb-8">
+          <div className="bg-white rounded-2xl shadow-lg p-8 transition-all duration-500">
+            <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center">
+                <div className="bg-purple-50 text-purple-600 p-3 rounded-xl mr-4">
+                  🏨
+                </div>
+                <h2 className="text-2xl font-bold text-gray-900">Hotel Recommendations</h2>
+              </div>
+              <div className="flex items-center bg-orange-50 text-orange-600 px-4 py-2 rounded-full">
+                <div className="flex items-center">
+                  <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse mr-1"></div>
+                  <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse mr-1" style={{ animationDelay: '0.2s' }}></div>
+                  <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse mr-2" style={{ animationDelay: '0.4s' }}></div>
+                </div>
+                <span className="font-medium text-sm">{hotelLoadingMessage.replace('🏨 ', '')}</span>
+              </div>
+            </div>
+            <div className="grid md:grid-cols-2 gap-6">
+              {[1, 2].map((i) => (
+                <div key={i} className="border border-gray-100 rounded-xl overflow-hidden animate-pulse opacity-60">
+                  <div className="aspect-[4/3] bg-gray-200"></div>
+                  <div className="p-6">
+                    <div className="h-6 bg-gray-200 rounded w-3/4 mb-3"></div>
+                    <div className="flex items-center mb-3">
+                      <div className="flex space-x-1">
+                        {[...Array(5)].map((_, j) => (
+                          <div key={j} className="w-4 h-4 bg-gray-200 rounded"></div>
+                        ))}
+                      </div>
+                      <div className="h-4 bg-gray-200 rounded w-12 ml-2"></div>
+                    </div>
+                    <div className="h-4 bg-gray-200 rounded w-full mb-2"></div>
+                    <div className="h-4 bg-gray-200 rounded w-2/3 mb-4"></div>
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      <div className="h-6 bg-gray-200 rounded w-16"></div>
+                      <div className="h-6 bg-gray-200 rounded w-20"></div>
+                      <div className="h-6 bg-gray-200 rounded w-14"></div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="h-8 bg-gray-200 rounded w-24"></div>
+                      <div className="h-8 bg-gray-200 rounded w-20"></div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+    
+    // Initial loading state
     if (loadingPhase === 'hotels' && (!tripData || !tripData.hotels)) {
-      // Show skeleton while loading hotels
       return (
         <div className="p-6 pb-8">
           <div className="bg-white rounded-2xl shadow-lg p-8">
@@ -286,8 +473,8 @@ const IncrementalTripPlan: React.FC<IncrementalTripPlanProps> = ({
       );
     }
 
-    if (tripData && tripData.hotels && ['hotels', 'activities', 'complete'].includes(loadingPhase)) {
-      // Show actual hotel data
+    if (tripData && tripData.hotels && ['hotels', 'activities', 'complete'].includes(loadingPhase) && !isHotelLoading) {
+      // Show actual hotel data (only if not currently loading)
       return (
         <div className="p-6 pb-8">
           <div className="bg-white rounded-2xl shadow-lg p-8">
@@ -307,20 +494,22 @@ const IncrementalTripPlan: React.FC<IncrementalTripPlanProps> = ({
             </div>
             <div className="grid md:grid-cols-2 gap-6">
               {tripData.hotels.map((hotel) => (
-                <div key={hotel.id} className="border border-gray-100 rounded-xl overflow-hidden hover:shadow-lg transition-all duration-200 hover:border-purple-200">
-                  {/* Hotel Image */}
-                  <div className="aspect-[4/3] bg-gradient-to-br from-gray-100 to-gray-200 relative overflow-hidden">
-                    <img 
-                      src={`https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80`}
-                      alt={hotel.name}
-                      className="w-full h-full object-cover"
-                    />
-                    <div className="absolute top-4 left-4">
-                      <span className="bg-white/90 backdrop-blur-sm text-purple-700 px-3 py-1 rounded-full text-sm font-semibold">
-                        {hotel.category}
-                      </span>
+                  <div key={hotel.id} className="border border-gray-100 rounded-xl overflow-hidden hover:shadow-lg transition-all duration-200 hover:border-purple-200">
+                    {/* Hotel Image */}
+                    <div className="aspect-[4/3] relative overflow-hidden">
+                      <ImageWithFallback
+                        src={getHotelImageUrl(hotel.name, hotel.location)}
+                        alt={`${hotel.name} hotel`}
+                        className="w-full h-full object-cover"
+                        fallbackGradient="bg-gradient-to-br from-purple-100 to-pink-100"
+                        showShimmer={true}
+                      />
+                      <div className="absolute top-4 left-4">
+                        <span className="bg-white/90 backdrop-blur-sm text-purple-700 px-3 py-1 rounded-full text-sm font-semibold">
+                          {hotel.category}
+                        </span>
+                      </div>
                     </div>
-                  </div>
                   
                   <div className="p-6">
                     {/* Hotel name and rating */}
@@ -377,8 +566,69 @@ const IncrementalTripPlan: React.FC<IncrementalTripPlanProps> = ({
   };
 
   const renderItinerarySection = () => {
+    const isActivityLoading = isSectionLoading('activities');
+    const activityLoadingMessage = getSectionLoadingMessage('activities');
+    
+    // Show targeted loading for follow-up queries
+    if (isFollowUpQuery && isActivityLoading && tripData?.itinerary) {
+      return (
+        <div className="p-6 pb-8">
+          <div className="bg-white rounded-2xl shadow-lg p-8 transition-all duration-500">
+            <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center">
+                <div className="bg-green-50 text-green-600 p-3 rounded-xl mr-4">
+                  📅
+                </div>
+                <h2 className="text-2xl font-bold text-gray-900">Day-by-Day Itinerary</h2>
+              </div>
+              <div className="flex items-center bg-orange-50 text-orange-600 px-4 py-2 rounded-full">
+                <div className="flex items-center">
+                  <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse mr-1"></div>
+                  <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse mr-1" style={{ animationDelay: '0.2s' }}></div>
+                  <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse mr-2" style={{ animationDelay: '0.4s' }}></div>
+                </div>
+                <span className="font-medium text-sm">{activityLoadingMessage.replace('🎯 ', '').replace('📅 ', '')}</span>
+              </div>
+            </div>
+            
+            {/* Timeline skeleton with reduced opacity */}
+            <div className="relative opacity-60">
+              <div className="absolute left-8 top-0 bottom-0 w-0.5 bg-gray-200"></div>
+              {[1, 2, 3].map((day) => (
+                <div key={day} className="relative mb-8 last:mb-0">
+                  <div className="flex items-start">
+                    <div className="flex-shrink-0 w-16 h-16 bg-gray-200 rounded-full animate-pulse flex items-center justify-center relative z-10">
+                      <div className="w-8 h-8 bg-gray-300 rounded-full"></div>
+                    </div>
+                    <div className="ml-6 flex-1">
+                      <div className="bg-gray-50 rounded-xl p-6 animate-pulse">
+                        <div className="h-6 bg-gray-200 rounded w-1/3 mb-3"></div>
+                        <div className="h-4 bg-gray-200 rounded w-2/3 mb-4"></div>
+                        <div className="space-y-3">
+                          {[1, 2].map((activity) => (
+                            <div key={activity} className="flex items-center space-x-4 p-3 bg-white rounded-lg">
+                              <div className="w-12 h-12 bg-gray-200 rounded-lg"></div>
+                              <div className="flex-1">
+                                <div className="h-4 bg-gray-200 rounded w-1/2 mb-2"></div>
+                                <div className="h-3 bg-gray-200 rounded w-1/3"></div>
+                              </div>
+                              <div className="h-4 bg-gray-200 rounded w-12"></div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+    
+    // Initial loading state
     if (loadingPhase === 'activities' && (!tripData || !tripData.itinerary)) {
-      // Show skeleton while loading activities
       return (
         <div className="p-6 pb-8">
           <div className="bg-white rounded-2xl shadow-lg p-8">
@@ -434,8 +684,8 @@ const IncrementalTripPlan: React.FC<IncrementalTripPlanProps> = ({
       );
     }
 
-    if (tripData && tripData.itinerary && loadingPhase === 'complete') {
-      // Show actual itinerary data with timeline
+    if (tripData && tripData.itinerary && loadingPhase === 'complete' && !isActivityLoading) {
+      // Show actual itinerary data with timeline (only if not currently loading)
       return (
         <div className="p-6 pb-8">
           <div className="bg-white rounded-2xl shadow-lg p-8">
@@ -480,10 +730,12 @@ const IncrementalTripPlan: React.FC<IncrementalTripPlanProps> = ({
                             <div key={activity.id} className="flex items-start space-x-4 p-4 bg-white rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-all duration-200">
                               {/* Activity image */}
                               <div className="flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden relative">
-                                <img 
-                                  src={`https://images.unsplash.com/photo-1539650116574-75c0c6d73c6e?ixlib=rb-4.0.3&auto=format&fit=crop&w=200&q=80`}
+                                <ImageWithFallback
+                                  src={getActivityImageUrl(activity.name, tripData.destination)}
                                   alt={activity.name}
                                   className="w-full h-full object-cover"
+                                  fallbackGradient="bg-gradient-to-br from-teal-100 to-blue-100"
+                                  showShimmer={true}
                                 />
                                 <div className="absolute inset-0 bg-gradient-to-br from-transparent to-black/20"></div>
                                 <div className="absolute bottom-1 right-1 text-white text-lg">

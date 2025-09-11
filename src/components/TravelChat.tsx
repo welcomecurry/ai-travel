@@ -6,6 +6,7 @@ import TripPlanSkeleton from './TripPlanSkeleton';
 import DesigningTrip from './DesigningTrip';
 import TypewriterText from './TypewriterText';
 import IncrementalTripPlan from './IncrementalTripPlan';
+import { analyzeQuery, isFollowUpQuery, createSectionLoadingState, SectionLoadingState } from '../lib/queryDetection';
 
 interface Message {
   id: string;
@@ -15,6 +16,7 @@ interface Message {
   type?: 'text' | 'trip_plan' | 'follow_up';
   tripData?: TripPlanData;
   isTyping?: boolean;
+  isStreaming?: boolean;
 }
 
 type ConversationPhase = 'initial' | 'follow_up' | 'generating' | 'complete';
@@ -52,7 +54,17 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
             ? 'layla-gradient text-white rounded-br-lg shadow-sm' 
             : 'bg-gray-50 border border-gray-100 text-gray-700 rounded-bl-lg shadow-sm'
         }`}>
-          {message.isTyping ? (
+          {message.isStreaming ? (
+            <>
+              <div 
+                className="text-sm leading-relaxed font-normal"
+                dangerouslySetInnerHTML={{ 
+                  __html: (message.content || '').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br />') 
+                }}
+              />
+              <span className="animate-pulse text-teal-500 font-bold">|</span>
+            </>
+          ) : message.isTyping ? (
             <>
               <TypewriterText 
                 text={message.content || ''}
@@ -118,6 +130,10 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
   const [phaseMessage, setPhaseMessage] = useState<string>('');
   const [loadingStage, setLoadingStage] = useState<LoadingStage>({ stage: 'searching', message: 'Analyzing your request...' });
   const [currentTripPlan, setCurrentTripPlan] = useState<TripPlanData | null>(null);
+  const [sectionLoadingStates, setSectionLoadingStates] = useState<SectionLoadingState[]>([]);
+  const [isFollowUp, setIsFollowUp] = useState(false);
+  const [showTwoColumns, setShowTwoColumns] = useState(true);
+  const [isTransitioning, setIsTransitioning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -175,6 +191,18 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
   };
 
   const simulateIncrementalLoading = (tripData?: TripPlanData) => {
+    // First, transition to two-column layout if not already shown
+    if (!showTwoColumns) {
+      setIsTransitioning(true);
+      setShowTwoColumns(true);
+      setConversationPhase('generating');
+      
+      // Complete layout transition
+      setTimeout(() => {
+        setIsTransitioning(false);
+      }, 300);
+    }
+    
     const phases = [
       { phase: 'analyzing' as LoadingPhase, message: 'Analyzing your request...', delay: 2000 },
       { phase: 'flights' as LoadingPhase, message: 'Finding best flights...', delay: 2500 },
@@ -236,7 +264,7 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
     }, 1500);
   };
 
-  const handleAPICall = async (message: string, thinkingMessageId?: string) => {
+  const handleAPICall = async (message: string, thinkingMessageId?: string, queryAnalysis?: any) => {
     // Validate message input
     if (!message || typeof message !== 'string' || !message.trim()) {
       setError('Please enter a valid message');
@@ -267,12 +295,34 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
         throw new Error(errorData.error || 'Failed to get response');
       }
 
-      // Handle streaming response
+      // Handle streaming response with real-time display
       const reader = response.body?.getReader();
       if (!reader) throw new Error('No response body');
 
       const decoder = new TextDecoder();
       let accumulatedContent = '';
+      let streamingMessageId: string | null = null;
+
+      // Create initial streaming message
+      if (thinkingMessageId) {
+        streamingMessageId = thinkingMessageId;
+        setMessages(prev => prev.map(msg => 
+          msg.id === thinkingMessageId 
+            ? { ...msg, content: '', isTyping: false, type: 'text', isStreaming: true }
+            : msg
+        ));
+      } else {
+        streamingMessageId = Date.now().toString() + '-streaming';
+        const streamingMessage: Message = {
+          id: streamingMessageId,
+          content: '',
+          sender: 'ai',
+          timestamp: new Date(),
+          type: 'text',
+          isStreaming: true
+        };
+        setMessages(prev => [...prev, streamingMessage]);
+      }
 
       while (true) {
         const { done, value } = await reader.read();
@@ -287,6 +337,28 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
               const data = JSON.parse(line.slice(6));
               if (data.content) {
                 accumulatedContent += data.content;
+                
+                // Try to extract and stream the actual message content from JSON as it builds
+                const isJsonContent = accumulatedContent.trim().startsWith('{') || accumulatedContent.trim().startsWith('[');
+                
+                if (streamingMessageId) {
+                  if (isJsonContent) {
+                    // For JSON content, show a processing message (don't stream the raw JSON)
+                    setMessages(prev => prev.map(msg => 
+                      msg.id === streamingMessageId 
+                        ? { ...msg, content: 'Processing your request...' }
+                        : msg
+                    ));
+                  } else {
+                    // Regular text content - stream directly in real-time!
+                    console.log('🎯 Streaming text:', accumulatedContent.substring(-20));
+                    setMessages(prev => prev.map(msg => 
+                      msg.id === streamingMessageId 
+                        ? { ...msg, content: accumulatedContent }
+                        : msg
+                    ));
+                  }
+                }
               }
             } catch (e) {
               // Ignore parsing errors for malformed chunks
@@ -295,21 +367,104 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
         }
       }
 
+      // Mark streaming as complete
+      const isJsonContent = accumulatedContent.trim().startsWith('{') || accumulatedContent.trim().startsWith('[');
+      
+      if (streamingMessageId) {
+        if (isJsonContent) {
+          // For JSON content, mark as complete but keep the message for JSON parsing to update
+          setMessages(prev => prev.map(msg => 
+            msg.id === streamingMessageId 
+              ? { ...msg, isStreaming: false, content: 'Processing your request...' }
+              : msg
+          ));
+        } else {
+          // Mark regular streaming as complete
+          setMessages(prev => prev.map(msg => 
+            msg.id === streamingMessageId 
+              ? { ...msg, isStreaming: false }
+              : msg
+          ));
+        }
+      }
+
+      // Check if the response is JSON or plain text
+      const isJsonResponse = accumulatedContent.trim().startsWith('{') || accumulatedContent.trim().startsWith('[');
+      
+      console.log('📋 Response type detection:', {
+        isJsonResponse,
+        contentLength: accumulatedContent.length,
+        contentStart: accumulatedContent.substring(0, 50),
+        contentEnd: accumulatedContent.substring(-50)
+      });
+      
+      if (!isJsonResponse) {
+        // This is a plain text streaming response - the streaming already handled it
+        console.log('✅ Plain text streaming response completed - no right column update needed');
+        return;
+      }
+      
+      console.log('🔧 Processing JSON response for right column...');
+
       // Try to parse the complete response as JSON
       try {
-        const responseData = JSON.parse(accumulatedContent);
+        // First, try to parse the response as-is
+        let responseData;
+        try {
+          responseData = JSON.parse(accumulatedContent);
+        } catch (initialParseError) {
+          // If parsing fails, check if it's truncated JSON and try to repair it
+          console.warn('🔧 Initial JSON parse failed, attempting repair...');
+          
+          const trimmed = accumulatedContent.trim();
+          if (trimmed.startsWith('{') && !trimmed.endsWith('}')) {
+            // Likely truncated JSON, try adding closing braces
+            console.log('🔧 Attempting to repair truncated JSON...');
+            
+            // Count open vs closed braces to determine how many we need
+            let openBraces = 0;
+            let openBrackets = 0;
+            
+            for (const char of trimmed) {
+              if (char === '{') openBraces++;
+              else if (char === '}') openBraces--;
+              else if (char === '[') openBrackets++;
+              else if (char === ']') openBrackets--;
+            }
+            
+            // Add missing closing characters
+            let repairedJson = trimmed;
+            for (let i = 0; i < openBrackets; i++) repairedJson += ']';
+            for (let i = 0; i < openBraces; i++) repairedJson += '}';
+            
+            console.log('🔧 Repaired JSON ending:', repairedJson.slice(-50));
+            responseData = JSON.parse(repairedJson);
+            console.log('✅ JSON repair successful!');
+          } else {
+            throw initialParseError; // Re-throw if not repairable
+          }
+        }
         
         if (responseData.type === 'follow_up') {
           // This is a follow-up response - stay in follow_up phase
-          if (thinkingMessageId) {
-            // Update the existing thinking message
+          const messageIdToUpdate = thinkingMessageId || streamingMessageId;
+          
+          console.log('🔄 Follow-up response handling:', {
+            thinkingMessageId,
+            streamingMessageId,
+            messageIdToUpdate,
+            responseType: responseData.type
+          });
+          
+          if (messageIdToUpdate) {
+            // Update the existing thinking/streaming message
             setMessages(prev => prev.map(msg => 
-              msg.id === thinkingMessageId 
-                ? { ...msg, content: responseData.message || 'Processing your request...', isTyping: true, type: 'follow_up' }
+              msg.id === messageIdToUpdate 
+                ? { ...msg, content: responseData.message || 'Processing your request...', isTyping: true, type: 'follow_up', isStreaming: false }
                 : msg
             ));
           } else {
-            // Add new message if no thinking message exists
+            // Add new message if no existing message to update
             const followUpMessage: Message = {
               id: Date.now().toString() + '-followup',
               content: responseData.message || 'I need some more information to help you better.',
@@ -322,31 +477,107 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
           }
           
         } else if (responseData.type === 'trip_plan') {
-          // This is a complete trip plan - start incremental loading
-          const confirmContent = `Perfect! I've crafted an amazing ${responseData.duration || 'trip'} to ${responseData.destination || 'your destination'} just for you! ✨\n\nI'm now building your personalized itinerary step by step. Watch the right side as I find flights, select hotels, and plan activities!`;
-          
-          if (thinkingMessageId) {
-            // Update the existing thinking message with confirmation
-            setMessages(prev => prev.map(msg => 
-              msg.id === thinkingMessageId 
-                ? { ...msg, content: confirmContent, isTyping: true, type: 'text' }
-                : msg
-            ));
+          // Handle both initial trip plan and follow-up updates
+          if (isFollowUp && queryAnalysis) {
+            // This is a follow-up update - update specific section
+            console.log('🔄 Processing follow-up update:', {
+              targetSection: queryAnalysis.targetSection,
+              hasNewData: !!responseData,
+              currentLoadingStates: sectionLoadingStates
+            });
+            
+            const updateMessage = `Great! I've updated your ${queryAnalysis.targetSection === 'hotels' ? 'hotel options' : queryAnalysis.targetSection === 'flights' ? 'flight options' : 'activities'} based on your request. Check out the new options on the right! ✨`;
+            
+            const messageIdToUpdate = thinkingMessageId || streamingMessageId;
+            if (messageIdToUpdate) {
+              setMessages(prev => prev.map(msg => 
+                msg.id === messageIdToUpdate 
+                  ? { ...msg, content: updateMessage, isTyping: false, type: 'text', isStreaming: false }
+                  : msg
+              ));
+            }
+            
+            // CRITICAL: Update the trip data with new information IMMEDIATELY
+            console.log('📝 Updating trip plan data:', responseData);
+            
+            // Debug: Check itinerary length for follow-up
+            if (responseData.itinerary) {
+              console.log('📅 Follow-up itinerary debug:', {
+                totalDays: responseData.itinerary.length,
+                dayNumbers: responseData.itinerary.map((day: any) => day.day)
+              });
+            }
+            
+            setCurrentTripPlan(responseData);
+            
+            // Clear loading states immediately to show the new content
+            console.log('🧹 Clearing loading states...');
+            setSectionLoadingStates([]);
+            setIsFollowUp(false);
+            setIsLoading(false);
+            
           } else {
-            // Add new message if no thinking message exists
-            const confirmMessage: Message = {
-              id: Date.now().toString() + '-confirm',
-              content: confirmContent,
-              sender: 'ai',
-              timestamp: new Date(),
-              type: 'text',
-              isTyping: true
-            };
-            setMessages(prev => [...prev, confirmMessage]);
+            // This is a complete initial trip plan - start incremental loading
+            console.log('🚀 Initial trip plan received:', responseData);
+            
+            // Debug: Check itinerary length for initial request
+            if (responseData.itinerary) {
+              console.log('📅 Initial itinerary debug:', {
+                totalDays: responseData.itinerary.length,
+                dayNumbers: responseData.itinerary.map((day: any) => day.day),
+                userRequest: inputValue
+              });
+              
+              // Add helper function to extract days from message
+              const extractDaysFromMessage = (message: string): number | null => {
+                const patterns = [
+                  /(\d+)\s*days?/i,
+                  /(\d+)\s*day\s*trip/i,
+                  /(\d+)\s*-?\s*day/i,
+                ];
+                
+                for (const pattern of patterns) {
+                  const match = message.match(pattern);
+                  if (match) {
+                    return parseInt(match[1]);
+                  }
+                }
+                return null;
+              };
+              
+              // Check if we have the expected number of days
+              const expectedDays = extractDaysFromMessage(inputValue);
+              if (expectedDays && responseData.itinerary.length !== expectedDays) {
+                console.warn(`⚠️ ITINERARY MISMATCH: User requested ${expectedDays} days but got ${responseData.itinerary.length} days`);
+              }
+            }
+            
+            const confirmContent = `Perfect! I've crafted an amazing ${responseData.duration || 'trip'} to ${responseData.destination || 'your destination'} just for you! ✨\n\nI'm now building your personalized itinerary step by step. Watch the right side as I find flights, select hotels, and plan activities!`;
+            
+            const messageIdToUpdate = thinkingMessageId || streamingMessageId;
+            if (messageIdToUpdate) {
+              // Update the existing thinking/streaming message with confirmation
+              setMessages(prev => prev.map(msg => 
+                msg.id === messageIdToUpdate 
+                  ? { ...msg, content: confirmContent, isTyping: true, type: 'text', isStreaming: false }
+                  : msg
+              ));
+            } else {
+              // Add new message if no existing message to update
+              const confirmMessage: Message = {
+                id: Date.now().toString() + '-confirm',
+                content: confirmContent,
+                sender: 'ai',
+                timestamp: new Date(),
+                type: 'text',
+                isTyping: true
+              };
+              setMessages(prev => [...prev, confirmMessage]);
+            }
+            
+            // Start incremental loading with the trip data
+            simulateIncrementalLoading(responseData);
           }
-          
-          // Start incremental loading with the trip data
-          simulateIncrementalLoading(responseData);
         } else {
           // Fallback to text message - but check if it's JSON first
           let displayContent = accumulatedContent || 'I received your message and I\'m working on a response.';
@@ -367,6 +598,12 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
         }
       } catch (parseError) {
         // If JSON parsing fails, treat as regular text message
+        console.error('🚨 JSON Parse Error:', parseError);
+        console.error('🔍 Raw accumulated content:', accumulatedContent);
+        console.error('🔍 Content length:', accumulatedContent?.length);
+        console.error('🔍 First 200 chars:', accumulatedContent?.substring(0, 200));
+        console.error('🔍 Last 200 chars:', accumulatedContent?.substring(-200));
+        
         let displayContent = accumulatedContent || 'I received your request, but I\'m having trouble processing it right now. Please try again.';
         
         // If content looks like JSON, show a generic message instead
@@ -388,21 +625,47 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
       console.error('Chat error:', error);
       setError(error instanceof Error ? error.message : 'Something went wrong');
       
+      // Clear loading states on error
+      if (isFollowUp) {
+        setSectionLoadingStates([]);
+        setIsFollowUp(false);
+      }
+      
       // Add error message
       const errorMessage: Message = {
         id: Date.now().toString() + '-error',
-        content: `Sorry, I encountered an error: ${error instanceof Error ? error.message : 'Something went wrong'}. Please try again.`,
+        content: isFollowUp 
+          ? `Sorry, I couldn't update your ${queryAnalysis?.targetSection || 'request'} right now. Please try again.`
+          : `Sorry, I encountered an error: ${error instanceof Error ? error.message : 'Something went wrong'}. Please try again.`,
         sender: 'ai',
         timestamp: new Date(),
         type: 'text'
       };
       setMessages(prev => [...prev, errorMessage]);
     } finally {
+      console.log('🏁 API call finally block:', {
+        isFollowUp,
+        loadingPhase,
+        sectionLoadingStatesCount: sectionLoadingStates.length
+      });
+      
       // Don't set isLoading to false here if we're in incremental loading mode
       // The incremental loading will handle this
       if (loadingPhase === 'idle' || loadingPhase === 'analyzing') {
         setIsLoading(false);
       }
+      
+      // For follow-up queries, the loading states should already be cleared in the success handler
+      // Only clear them here if they weren't cleared (error case)
+      if (isFollowUp && sectionLoadingStates.length > 0) {
+        console.log('🚨 Follow-up loading states not cleared - clearing now');
+        setTimeout(() => {
+          setSectionLoadingStates([]);
+          setIsFollowUp(false);
+          setIsLoading(false);
+        }, 1000);
+      }
+      
       setLoadingStage({ stage: 'complete', message: 'Complete!' });
     }
   };
@@ -423,11 +686,68 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
     const currentInput = inputValue.trim();
     setInputValue('');
     setError(null);
-    setIsLoading(true);
 
     // Reset textarea height
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
+    }
+
+    // Check if this is a follow-up query
+    const isFollowUpRequest = isFollowUpQuery(currentInput, !!currentTripPlan);
+    
+    if (isFollowUpRequest && currentTripPlan) {
+      // Analyze the query to determine intent and target section
+      const queryAnalysis = analyzeQuery(currentInput);
+      
+      console.log('🚀 Starting follow-up query:', {
+        query: currentInput,
+        targetSection: queryAnalysis.targetSection,
+        confidence: queryAnalysis.confidence,
+        loadingMessage: queryAnalysis.loadingMessage
+      });
+      
+      // Set up targeted loading
+      setIsFollowUp(true);
+      setIsLoading(true);
+      
+      // Create section-specific loading states
+      const loadingStates = createSectionLoadingState(queryAnalysis.targetSection, queryAnalysis.loadingMessage);
+      setSectionLoadingStates(loadingStates);
+      
+      console.log('📊 Created loading states:', loadingStates);
+      
+      // Add immediate loading message in chat
+      const loadingMessage: Message = {
+        id: Date.now().toString() + '-loading',
+        content: queryAnalysis.loadingMessage,
+        sender: 'ai',
+        timestamp: new Date(),
+        type: 'text',
+        isTyping: true
+      };
+      setMessages(prev => [...prev, loadingMessage]);
+      
+      // Make API call with context about the targeted update
+      await handleAPICall(currentInput, loadingMessage.id, queryAnalysis);
+      return;
+    }
+
+    // Handle initial trip planning
+    setIsLoading(true);
+    setIsFollowUp(false);
+    setShowTwoColumns(true);
+    setSectionLoadingStates([]);
+
+    // Trigger smooth transition to two-column layout for first message
+    if (conversationPhase === 'initial') {
+      setIsTransitioning(true);
+      setShowTwoColumns(true);
+      setConversationPhase('follow_up');
+      
+      // Complete layout transition
+      setTimeout(() => {
+        setIsTransitioning(false);
+      }, 300);
     }
 
     // If we're in follow_up phase and user is providing details, show thinking messages
@@ -456,8 +776,12 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
 
   return (
     <div className="flex h-screen bg-gray-50">
-      {/* Chat Column - Left Side (40%) */}
-      <div className="w-full lg:w-2/5 flex flex-col bg-white layla-shadow-soft">
+      {/* Chat Column - Left Side (responsive width) */}
+      <div className={`flex flex-col bg-white layla-shadow-soft transition-all duration-300 ease-out ${
+        showTwoColumns 
+          ? 'w-full lg:w-2/5' 
+          : 'w-full'
+      } ${isTransitioning ? 'transform' : ''}`}>
         {/* Chat Header */}
         <div className="bg-white border-b border-gray-100 px-6 py-6">
           <div className="flex items-center">
@@ -531,7 +855,7 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
                 <button
                   onClick={handleSend}
                   disabled={!inputValue.trim() || isLoading}
-                  className="w-8 h-8 layla-gradient rounded-full flex items-center justify-center transition-all duration-200 hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex-shrink-0"
+                  className={`w-8 h-8 layla-gradient rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex-shrink-0 ${isLoading ? 'animate-pulse' : ''}`}
                 >
                   {isLoading ? (
                     <svg className="w-4 h-4 animate-spin text-white" fill="none" viewBox="0 0 24 24">
@@ -540,7 +864,7 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
                     </svg>
                   ) : (
                     <svg 
-                      className="w-4 h-4 text-white" 
+                      className="w-4 h-4 text-white transition-transform duration-200 hover:translate-x-0.5" 
                       fill="currentColor" 
                       viewBox="0 0 24 24"
                     >
@@ -554,8 +878,11 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
         </div>
       </div>
 
-      {/* Itinerary Column - Right Side (60%) */}
-      <div className="hidden lg:flex lg:w-3/5 flex-col bg-gray-50">
+      {/* Itinerary Column - Right Side (60%) - Shows when two columns active */}
+      {showTwoColumns && (
+        <div className={`flex flex-col lg:w-3/5 bg-gray-50 transition-all duration-300 ease-out ${
+          isTransitioning ? 'opacity-0 translate-x-4' : 'opacity-100 translate-x-0'
+        }`}>
         {(() => {
           switch (conversationPhase) {
             case 'initial':
@@ -592,7 +919,17 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
               );
             
             case 'follow_up':
-              return <DesigningTrip />;
+              return currentTripPlan ? (
+                <IncrementalTripPlan
+                  loadingPhase="complete"
+                  tripData={currentTripPlan}
+                  phaseMessage=""
+                  sectionLoadingStates={sectionLoadingStates}
+                  isFollowUpQuery={isFollowUp}
+                />
+              ) : (
+                <DesigningTrip />
+              );
             
             case 'generating':
             case 'complete':
@@ -601,6 +938,8 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
                   loadingPhase={loadingPhase}
                   tripData={currentTripPlan || undefined}
                   phaseMessage={phaseMessage}
+                  sectionLoadingStates={sectionLoadingStates}
+                  isFollowUpQuery={isFollowUp}
                 />
               );
             
@@ -608,7 +947,8 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
               return <DesigningTrip />;
           }
         })()}
-      </div>
+        </div>
+      )}
     </div>
   );
 };

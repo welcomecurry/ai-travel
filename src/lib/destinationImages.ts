@@ -125,9 +125,33 @@ export function getGradientFallback(destination: string): string {
   return GRADIENT_FALLBACKS[hash % GRADIENT_FALLBACKS.length];
 }
 
-// Function to get Unsplash image URL (for future API integration)
+// Function to get Unsplash image URL with proper query formatting
 export function getUnsplashImageUrl(destination: string, width = 1920, height = 1080): string {
-  const query = encodeURIComponent(`${destination} cityscape landmarks travel`);
+  const query = encodeURIComponent(`${destination.replace(/,.*$/, '')} cityscape landmarks travel`);
+  return `https://source.unsplash.com/${width}x${height}/?${query}`;
+}
+
+// Function to get hotel image from Unsplash
+export function getHotelImageUrl(hotelName: string, location: string, width = 800, height = 600): string {
+  const locationClean = location.replace(/,.*$/, '');
+  const query = encodeURIComponent(`luxury hotel ${locationClean} interior room`);
+  return `https://source.unsplash.com/${width}x${height}/?${query}`;
+}
+
+// Function to get activity image from Unsplash
+export function getActivityImageUrl(activityName: string, destination: string, width = 400, height = 300): string {
+  const destinationClean = destination.replace(/,.*$/, '');
+  let activityType = 'attraction';
+  
+  // Determine activity type from name
+  if (activityName.toLowerCase().includes('museum')) activityType = 'museum';
+  else if (activityName.toLowerCase().includes('restaurant') || activityName.toLowerCase().includes('dining')) activityType = 'restaurant food';
+  else if (activityName.toLowerCase().includes('tour')) activityType = 'tour guide';
+  else if (activityName.toLowerCase().includes('park')) activityType = 'park garden';
+  else if (activityName.toLowerCase().includes('market')) activityType = 'market shopping';
+  else if (activityName.toLowerCase().includes('cathedral') || activityName.toLowerCase().includes('church')) activityType = 'cathedral architecture';
+  
+  const query = encodeURIComponent(`${activityType} ${destinationClean}`);
   return `https://source.unsplash.com/${width}x${height}/?${query}`;
 }
 
