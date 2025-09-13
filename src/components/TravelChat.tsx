@@ -6,6 +6,8 @@ import TripPlanSkeleton from './TripPlanSkeleton';
 import DesigningTrip from './DesigningTrip';
 import TypewriterText from './TypewriterText';
 import IncrementalTripPlan from './IncrementalTripPlan';
+import TripPlanLayout from './TripPlanLayout';
+import DestinationMap from './DestinationMap';
 import { analyzeQuery, isFollowUpQuery, createSectionLoadingState, SectionLoadingState } from '../lib/queryDetection';
 
 interface Message {
@@ -130,12 +132,27 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
   const [loadingStage, setLoadingStage] = useState<LoadingStage>({ stage: 'searching', message: 'Analyzing your request...' });
   const [currentTripPlan, setCurrentTripPlan] = useState<TripPlanData | null>(null);
   const [sectionLoadingStates, setSectionLoadingStates] = useState<SectionLoadingState[]>([]);
+  
+  // Responsive layout states
+  const [isMobile, setIsMobile] = useState(false);
+  const [activeTab, setActiveTab] = useState<'trip' | 'map'>('trip');
   const [isFollowUp, setIsFollowUp] = useState(false);
   const [showTwoColumns, setShowTwoColumns] = useState(true);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Detect mobile screen size
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 1024);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Helper function to extract destination from user message
   const getDestinationFromMessage = (message: string): string => {
@@ -184,7 +201,12 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
   // Handle initial message from landing page
   useEffect(() => {
     if (initialMessage && !isLoading && conversationPhase === 'initial') {
+      // Check if we've already processed this initial message
+      const hasInitialMessage = messages.some(msg => msg.id.startsWith('initial-user-'));
+      if (hasInitialMessage) return;
+
       setInputValue(initialMessage);
+      
       // Auto-send the initial message after a brief delay
       const timeoutId = setTimeout(() => {
         if (initialMessage.trim()) {
@@ -195,12 +217,8 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
             timestamp: new Date(),
             type: 'text'
           };
-          setMessages(prev => {
-            // Prevent duplicate initial messages
-            const hasInitialMessage = prev.some(msg => msg.id.startsWith('initial-user-'));
-            if (hasInitialMessage) return prev;
-            return [...prev, userMessage];
-          });
+          
+          setMessages(prev => [...prev, userMessage]);
           setInputValue('');
           setError(null);
           setIsLoading(true);
@@ -209,11 +227,11 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
           // Make API call
           handleAPICall(initialMessage.trim());
         }
-      }, 500);
+      }, 300); // Reduced delay
 
       return () => clearTimeout(timeoutId);
     }
-  }, [initialMessage]);
+  }, [initialMessage, messages, isLoading, conversationPhase]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInputValue(e.target.value);
@@ -463,8 +481,8 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
         isJsonResponse,
         contentLength: accumulatedContent.length,
         contentStart: accumulatedContent.substring(0, 100),
-        contentEnd: accumulatedContent.substring(-100),
-        fullContent: accumulatedContent.length < 200 ? accumulatedContent : 'Too long to show'
+        contentEnd: accumulatedContent.slice(-100),
+        trimmedStart: accumulatedContent.trim().substring(0, 50)
       });
       
       if (!isJsonResponse) {
@@ -663,6 +681,11 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
               messageIdToUpdate,
               message: message.substring(0, 50) + '...'
             });
+            
+            // CRITICAL: Set the trip data immediately for right column display
+            console.log('🎯 Setting currentTripPlan for right column:', responseData);
+            setCurrentTripPlan(responseData);
+            
             simulateIncrementalLoading(responseData, messageIdToUpdate, message);
           }
         } else {
@@ -874,13 +897,15 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
   };
 
   return (
-    <div className="flex h-full bg-gray-50 gap-0">
-      {/* Chat Column - Left Side (responsive width) */}
-      <div className={`flex flex-col bg-white layla-shadow-soft transition-all duration-300 ease-out ${
-        showTwoColumns 
-          ? 'w-full lg:w-3/5' 
-          : 'w-full'
-      }`}>
+    <>
+      {/* Desktop: Two or Three columns based on destination */}
+      <div className="hidden lg:flex h-full bg-[#e9f6f7] gap-0">
+        {/* Left Column - Chat (responsive width based on map visibility) */}
+        <div className={`flex flex-col bg-white layla-shadow-soft border-r border-gray-200 ${
+          (conversationPhase === 'generating' || conversationPhase === 'complete' || conversationPhase === 'follow_up') && currentTripPlan
+            ? 'w-[30%]' 
+            : 'w-[45%]'
+        }`}>
 
         {/* Chat Messages */}
         <div className="flex-1 overflow-y-auto px-6 py-6 space-y-4 scrollbar-hide">
@@ -973,11 +998,16 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
             </div>
           </div>
         </div>
-      </div>
+        </div>
 
-      {/* Itinerary Column - Right Side (55%) - Shows when two columns active */}
-      {showTwoColumns && (
-        <div className="flex flex-col lg:w-full rounded-2xl layla-shadow-medium m-4 overflow-hidden" style={{ backgroundColor: '#e9f6f7' }}>
+        {/* Middle Column - Trip Details (responsive width based on map visibility) */}
+        <div className={`bg-gray-50 overflow-y-auto ${
+          (conversationPhase === 'generating' || conversationPhase === 'complete' || conversationPhase === 'follow_up') && currentTripPlan
+            ? 'w-[45%]' 
+            : 'w-[55%]'
+        }`}>
+        {showTwoColumns && (
+          <div className="h-full">
         {(() => {
           switch (conversationPhase) {
             case 'initial':
@@ -1015,19 +1045,16 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
             
             case 'follow_up':
               return currentTripPlan ? (
-                <IncrementalTripPlan
-                  loadingPhase="complete"
-                  tripData={currentTripPlan}
-                  sectionLoadingStates={sectionLoadingStates}
-                  isFollowUpQuery={isFollowUp}
-                />
+                <TripPlanLayout tripData={currentTripPlan} />
               ) : (
                 <DesigningTrip />
               );
             
             case 'generating':
             case 'complete':
-              return (
+              return currentTripPlan ? (
+                <TripPlanLayout tripData={currentTripPlan} />
+              ) : (
                 <IncrementalTripPlan
                   loadingPhase={loadingPhase}
                   tripData={currentTripPlan || undefined}
@@ -1041,8 +1068,183 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
           }
         })()}
         </div>
-      )}
-    </div>
+        )}
+        </div>
+
+        {/* Right Column - Map (25%) - Only show when we have destination data */}
+        {(conversationPhase === 'generating' || conversationPhase === 'complete' || conversationPhase === 'follow_up') && currentTripPlan && (
+          <div className="w-[25%] bg-white border-l border-gray-200">
+            <DestinationMap tripData={currentTripPlan} />
+          </div>
+        )}
+      </div>
+
+      {/* Mobile: Tabbed interface */}
+      <div className="lg:hidden h-full flex flex-col bg-[#e9f6f7]">
+        {/* Chat Section - Top 60% */}
+        <div className="h-[60%] bg-white flex flex-col">
+          {/* Chat Messages */}
+          <div className="flex-1 overflow-y-auto px-6 py-6 space-y-4 scrollbar-hide">
+            {messages
+              .filter(message => message && message.content !== undefined && message.id)
+              .map((message) => (
+                <MessageBubble key={message.id} message={message} />
+              ))}
+            
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Chat Input */}
+          <div className="px-6 py-4 border-t border-gray-100">
+            <div className="prompt-input-container">
+              <div className="flex items-end gap-3">
+                <div className="flex-1">
+                  <textarea
+                    ref={textareaRef}
+                    value={inputValue}
+                    onChange={handleInputChange}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSend();
+                      }
+                    }}
+                    placeholder="Ask me anything about your travel plans..."
+                    className="w-full resize-none border-none outline-none bg-transparent text-gray-900 placeholder-gray-500"
+                    rows={1}
+                    style={{
+                      minHeight: '24px',
+                      maxHeight: '120px',
+                      lineHeight: '24px'
+                    }}
+                    disabled={isLoading}
+                  />
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleMicrophoneClick}
+                    className="mic-button"
+                    disabled={isLoading}
+                  >
+                    <img
+                      src="/microphone-icon.svg"
+                      alt="microphone"
+                      width={20}
+                      height={20}
+                    />
+                  </button>
+
+                  <button
+                    onClick={handleSend}
+                    disabled={isLoading || !inputValue.trim()}
+                    className="send-button-clean"
+                  >
+                    {isLoading ? (
+                      <svg className="w-4 h-4 animate-spin text-white" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="m100-200c0-8.284-6.716-15-15-15-8.284 0-15 6.716-15 15 0 8.284 6.716 15 15 15 8.284 0 15-6.716 15-15zm-1.5 0c0 7.456-6.044 13.5-13.5 13.5-7.456 0-13.5-6.044-13.5-13.5 0-7.456 6.044-13.5 13.5-13.5 7.456 0 13.5 6.044 13.5 13.5z"></path>
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Tab Navigation - Only show map tab when we have destination data */}
+        <div className="flex border-t border-gray-200">
+          <button
+            className={`p-3 text-center font-medium transition-colors ${
+              (conversationPhase === 'generating' || conversationPhase === 'complete' || conversationPhase === 'follow_up') && currentTripPlan
+                ? 'flex-1' 
+                : 'w-full'
+            } ${
+              activeTab === 'trip' 
+                ? 'bg-blue-500 text-white' 
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+            onClick={() => setActiveTab('trip')}
+          >
+            Trip Details
+          </button>
+          {(conversationPhase === 'generating' || conversationPhase === 'complete' || conversationPhase === 'follow_up') && currentTripPlan && (
+            <button
+              className={`flex-1 p-3 text-center font-medium transition-colors ${
+                activeTab === 'map' 
+                  ? 'bg-blue-500 text-white' 
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+              onClick={() => setActiveTab('map')}
+            >
+              Map
+            </button>
+          )}
+        </div>
+
+        {/* Content Section - Bottom 40% */}
+        <div className="h-[40%] overflow-y-auto">
+          {activeTab === 'trip' || !(conversationPhase === 'generating' || conversationPhase === 'complete' || conversationPhase === 'follow_up') || !currentTripPlan ? (
+            showTwoColumns && (
+              <div className="h-full" style={{ backgroundColor: '#e9f6f7' }}>
+                {(() => {
+                  switch (conversationPhase) {
+                    case 'initial':
+                      return (
+                        <div className="flex-1 flex items-center justify-center p-6">
+                          <div className="text-center max-w-md mx-auto">
+                            <div className="w-16 h-16 layla-gradient rounded-full flex items-center justify-center mx-auto mb-4">
+                              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                            </div>
+                            <h3 className="text-lg font-semibold layla-text-primary mb-2">
+                              Ready to Plan Your Trip?
+                            </h3>
+                            <p className="layla-text-secondary text-sm">
+                              Start chatting above to create your personalized itinerary.
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    
+                    case 'follow_up':
+                      return currentTripPlan ? (
+                        <TripPlanLayout tripData={currentTripPlan} />
+                      ) : (
+                        <DesigningTrip />
+                      );
+                    
+                    case 'generating':
+                    case 'complete':
+                      return currentTripPlan ? (
+                        <TripPlanLayout tripData={currentTripPlan} />
+                      ) : (
+                        <IncrementalTripPlan
+                          loadingPhase={loadingPhase}
+                          tripData={currentTripPlan || undefined}
+                          sectionLoadingStates={sectionLoadingStates}
+                          isFollowUpQuery={isFollowUp}
+                        />
+                      );
+                    
+                    default:
+                      return <DesigningTrip />;
+                  }
+                })()}
+              </div>
+            )
+          ) : (
+            <DestinationMap tripData={currentTripPlan} />
+          )}
+        </div>
+      </div>
+    </>
   );
 };
 
