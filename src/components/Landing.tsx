@@ -90,7 +90,7 @@ const Landing: React.FC<LandingProps> = ({ onSendMessage }) => {
   ];
 
   return (
-    <div className="min-h-screen bg-white flex flex-col items-center justify-center px-6 py-12">
+    <div className="h-full bg-white flex flex-col items-center justify-center px-6 py-12">
       <div className="w-full max-w-4xl mx-auto text-center">
         {/* Hero Section */}
         <div className="mb-16">

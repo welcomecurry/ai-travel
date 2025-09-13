@@ -127,7 +127,6 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [conversationPhase, setConversationPhase] = useState<ConversationPhase>('initial');
   const [loadingPhase, setLoadingPhase] = useState<LoadingPhase>('idle');
-  const [phaseMessage, setPhaseMessage] = useState<string>('');
   const [loadingStage, setLoadingStage] = useState<LoadingStage>({ stage: 'searching', message: 'Analyzing your request...' });
   const [currentTripPlan, setCurrentTripPlan] = useState<TripPlanData | null>(null);
   const [sectionLoadingStates, setSectionLoadingStates] = useState<SectionLoadingState[]>([]);
@@ -137,6 +136,42 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
   const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Helper function to extract destination from user message
+  const getDestinationFromMessage = (message: string): string => {
+    return message.toLowerCase().includes('paris') ? 'Paris' :
+           message.toLowerCase().includes('tokyo') ? 'Tokyo' :
+           message.toLowerCase().includes('london') ? 'London' :
+           message.toLowerCase().includes('new york') ? 'New York' :
+           message.toLowerCase().includes('rome') ? 'Rome' :
+           message.toLowerCase().includes('barcelona') ? 'Barcelona' :
+           message.toLowerCase().includes('amsterdam') ? 'Amsterdam' :
+           message.toLowerCase().includes('berlin') ? 'Berlin' :
+           'your destination';
+  };
+
+  // Helper function to detect if conversational text contains trip data
+  const detectTripDataInText = (text: string): boolean => {
+    const tripIndicators = [
+      // Hotel indicators
+      /hotel|accommodation|stay|lodge|resort/i,
+      // Flight indicators
+      /flight|airline|airport|departure|arrival/i,
+      // Activity indicators
+      /activity|attraction|tour|visit|museum|restaurant/i,
+      // Cost indicators
+      /\$\d+|\d+\s*dollars?|budget|cost|price/i,
+      // Itinerary indicators
+      /day\s*\d+|itinerary|schedule|plan/i,
+      // Trip confirmation phrases
+      /crafted|planned|created.*trip|designed.*itinerary/i
+    ];
+    
+    // Check if text contains multiple trip indicators (higher confidence)
+    const matches = tripIndicators.filter(pattern => pattern.test(text)).length;
+    console.log('🔍 Trip data detection:', { matches, indicators: tripIndicators.map(p => p.test(text)) });
+    return matches >= 3; // Require at least 3 different types of trip indicators
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -190,26 +225,49 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
     }
   };
 
-  const simulateIncrementalLoading = (tripData?: TripPlanData) => {
-    // First, transition to two-column layout if not already shown
-    if (!showTwoColumns) {
-      setIsTransitioning(true);
-      setShowTwoColumns(true);
-      setConversationPhase('generating');
-      
-      // Complete layout transition
-      setTimeout(() => {
-        setIsTransitioning(false);
-      }, 300);
+  const simulateIncrementalLoading = (tripData?: TripPlanData, thinkingMessageId?: string, userMessage?: string) => {
+    // Only start incremental loading if we have actual trip data
+    if (!tripData) {
+      console.log('⚠️ No trip data provided to simulateIncrementalLoading, skipping...');
+      return;
     }
     
-    const phases = [
-      { phase: 'analyzing' as LoadingPhase, message: 'Analyzing your request...', delay: 2000 },
-      { phase: 'flights' as LoadingPhase, message: 'Finding best flights...', delay: 2500 },
-      { phase: 'hotels' as LoadingPhase, message: 'Searching hotels...', delay: 2200 },
-      { phase: 'activities' as LoadingPhase, message: 'Planning activities...', delay: 2800 },
-      { phase: 'complete' as LoadingPhase, message: 'Complete!', delay: 1000 }
-    ];
+    console.log('🚀 Starting incremental loading with trip data:', tripData.destination);
+    
+    // Immediately set the conversation phase and trip data
+    setConversationPhase('generating');
+    setCurrentTripPlan(tripData);
+    
+    // Get destination from user message for personalized messages
+    const destination = getDestinationFromMessage(userMessage || '');
+
+      const phases = [
+        { 
+          phase: 'analyzing' as LoadingPhase, 
+          message: `🤔 Understanding your ${destination} adventure preferences and travel requirements...`, 
+          delay: 2000 
+        },
+        { 
+          phase: 'flights' as LoadingPhase, 
+          message: `✈️ Checking 200+ airlines for the best flights to ${destination}...`, 
+          delay: 2500 
+        },
+        { 
+          phase: 'hotels' as LoadingPhase, 
+          message: `🏨 Scanning 1,500+ hotels in ${destination} within your budget...`, 
+          delay: 2200 
+        },
+        { 
+          phase: 'activities' as LoadingPhase, 
+          message: `🎯 Finding the best activities and Instagram-worthy spots for your adventure...`, 
+          delay: 2800 
+        },
+        { 
+          phase: 'complete' as LoadingPhase, 
+          message: `🗺️ Building your perfect day-by-day itinerary and calculating costs...`, 
+          delay: 1500 
+        }
+      ];
 
     let currentIndex = 0;
     
@@ -217,7 +275,15 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
       if (currentIndex < phases.length) {
         const currentPhase = phases[currentIndex];
         setLoadingPhase(currentPhase.phase);
-        setPhaseMessage(currentPhase.message);
+        
+        // Update the thinking message in chat with the current phase message
+        if (thinkingMessageId) {
+          setMessages(prev => prev.map(msg => 
+            msg.id === thinkingMessageId 
+              ? { ...msg, content: currentPhase.message, isTyping: true }
+              : msg
+          ));
+        }
         
         // If we have trip data and we're past analyzing, set it
         if (tripData && currentPhase.phase !== 'analyzing') {
@@ -242,13 +308,15 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
     // Start the generating phase and incremental loading immediately
     setConversationPhase('generating');
     setLoadingPhase('analyzing');
-    setPhaseMessage('Analyzing your preferences...');
+    
+    // Get destination for personalized initial message
+    const destination = getDestinationFromMessage(userMessage);
     
     // Create a single thinking message that will be updated
     const thinkingMessageId = Date.now().toString() + '-thinking';
     const initialThinkingMessage: Message = {
       id: thinkingMessageId,
-      content: '🤔 Analyzing your preferences...',
+      content: `🤔 Understanding your ${destination} adventure preferences and travel requirements...`,
       sender: 'ai',
       timestamp: new Date(),
       type: 'text',
@@ -394,13 +462,24 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
       console.log('📋 Response type detection:', {
         isJsonResponse,
         contentLength: accumulatedContent.length,
-        contentStart: accumulatedContent.substring(0, 50),
-        contentEnd: accumulatedContent.substring(-50)
+        contentStart: accumulatedContent.substring(0, 100),
+        contentEnd: accumulatedContent.substring(-100),
+        fullContent: accumulatedContent.length < 200 ? accumulatedContent : 'Too long to show'
       });
       
       if (!isJsonResponse) {
-        // This is a plain text streaming response - the streaming already handled it
-        console.log('✅ Plain text streaming response completed - no right column update needed');
+        // This is a plain text streaming response - check if it contains trip details
+        console.log('✅ Plain text streaming response completed - checking for trip details...');
+        
+        // Try to detect if the conversational response contains trip information
+        const containsTripData = detectTripDataInText(accumulatedContent);
+        
+        if (containsTripData) {
+          console.log('🎯 Detected trip data in conversational response - attempting extraction...');
+          // TODO: Extract trip data from conversational text and populate right column
+          // For now, we'll add this functionality in the next step
+        }
+        
         return;
       }
       
@@ -411,6 +490,7 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
         // First, try to parse the response as-is
         let responseData;
         try {
+          console.log('🔧 Attempting to parse JSON:', accumulatedContent.substring(0, 200) + '...');
           responseData = JSON.parse(accumulatedContent);
         } catch (initialParseError) {
           // If parsing fails, check if it's truncated JSON and try to repair it
@@ -576,7 +656,14 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
             }
             
             // Start incremental loading with the trip data
-            simulateIncrementalLoading(responseData);
+            console.log('🎯 About to call simulateIncrementalLoading with:', {
+              hasResponseData: !!responseData,
+              responseDataType: responseData?.type,
+              destination: responseData?.destination,
+              messageIdToUpdate,
+              message: message.substring(0, 50) + '...'
+            });
+            simulateIncrementalLoading(responseData, messageIdToUpdate, message);
           }
         } else {
           // Fallback to text message - but check if it's JSON first
@@ -735,19 +822,11 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
     // Handle initial trip planning
     setIsLoading(true);
     setIsFollowUp(false);
-    setShowTwoColumns(true);
     setSectionLoadingStates([]);
 
-    // Trigger smooth transition to two-column layout for first message
+    // Set conversation phase based on current state
     if (conversationPhase === 'initial') {
-      setIsTransitioning(true);
-      setShowTwoColumns(true);
       setConversationPhase('follow_up');
-      
-      // Complete layout transition
-      setTimeout(() => {
-        setIsTransitioning(false);
-      }, 300);
     }
 
     // If we're in follow_up phase and user is providing details, show thinking messages
@@ -763,6 +842,21 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
       }
     }
 
+    // Check if this looks like a complete trip request that should show thinking messages
+    const hasDestination = /paris|tokyo|london|new york|rome|barcelona|amsterdam|berlin|madrid|vienna|prague|budapest|dublin|stockholm|oslo|helsinki|copenhagen|lisbon|athens|istanbul|moscow|warsaw|krakow|budapest|prague|vienna/i.test(currentInput);
+    const hasBudget = /\$\d+|\d+\s*dollars?|budget/i.test(currentInput);
+    const hasDuration = /\d+\s*days?|\d+\s*day\s*trip/i.test(currentInput);
+    const hasTravelers = /\d+\s*people?|\d+\s*person|solo|alone|couple|family/i.test(currentInput);
+    
+    const isCompleteRequest = hasDestination && (hasBudget || hasDuration || hasTravelers);
+    
+    if (isCompleteRequest) {
+      console.log('🎯 Detected complete trip request, showing thinking messages');
+      showThinkingMessages(currentInput);
+      setIsLoading(false);
+      return;
+    }
+    
     // Make API call for other phases
     await handleAPICall(currentInput);
   };
@@ -774,28 +868,19 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
     }
   };
 
+  const handleMicrophoneClick = () => {
+    // TODO: Implement voice recording functionality
+    console.log('Microphone clicked');
+  };
+
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-full bg-gray-50 gap-0">
       {/* Chat Column - Left Side (responsive width) */}
       <div className={`flex flex-col bg-white layla-shadow-soft transition-all duration-300 ease-out ${
         showTwoColumns 
-          ? 'w-full lg:w-2/5' 
+          ? 'w-full lg:w-1/2' 
           : 'w-full'
-      } ${isTransitioning ? 'transform' : ''}`}>
-        {/* Chat Header */}
-        <div className="bg-white border-b border-gray-100 px-6 py-6">
-          <div className="flex items-center">
-            <div className="w-12 h-12 layla-gradient rounded-xl flex items-center justify-center mr-4">
-              <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <div>
-              <h1 className="text-xl font-semibold layla-text-primary layla-heading">AI Travel Agent</h1>
-              <p className="text-sm layla-text-secondary">Plan your perfect trip</p>
-            </div>
-          </div>
-        </div>
+      }`}>
 
         {/* Chat Messages */}
         <div className="flex-1 overflow-y-auto px-6 py-6 space-y-4 scrollbar-hide">
@@ -835,11 +920,11 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Chat Input - Exact Layla.ai Style */}
+        {/* Chat Input - Updated Style */}
         <div className="bg-white border-t border-gray-100 px-6 py-4">
           <div className="relative">
-            <div className="bg-white border border-gray-200 rounded-2xl layla-shadow-soft focus-within:border-teal-400 focus-within:ring-2 focus-within:ring-teal-100 transition-all duration-200">
-              <div className="flex items-center pr-2">
+            <div className="prompt-input-container">
+              <div className="flex items-center justify-between w-full gap-4">
                 <div className="flex-1 relative">
                   <textarea
                     ref={textareaRef}
@@ -847,48 +932,63 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
                     onChange={handleInputChange}
                     onKeyPress={handleKeyPress}
                     placeholder="Where would you like to go?"
-                    className="w-full px-4 py-3 bg-transparent border-none resize-none focus:outline-none text-sm leading-relaxed font-normal text-gray-800 placeholder:text-gray-400 min-h-[44px] max-h-[120px]"
+                    className="w-full px-3 py-3 bg-transparent border-none resize-none focus:outline-none text-sm leading-relaxed font-normal text-gray-800 placeholder:text-gray-400 min-h-[44px] max-h-[120px]"
                     rows={1}
                     disabled={isLoading}
                   />
                 </div>
-                <button
-                  onClick={handleSend}
-                  disabled={!inputValue.trim() || isLoading}
-                  className={`w-8 h-8 layla-gradient rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex-shrink-0 ${isLoading ? 'animate-pulse' : ''}`}
-                >
-                  {isLoading ? (
-                    <svg className="w-4 h-4 animate-spin text-white" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="m100-200c0-8.284-6.716-15-15-15-8.284 0-15 6.716-15 15 0 8.284 6.716 15 15 15 8.284 0 15-6.716 15-15zm-1.5 0c0 7.456-6.044 13.5-13.5 13.5-7.456 0-13.5-6.044-13.5-13.5 0-7.456 6.044-13.5 13.5-13.5 7.456 0 13.5 6.044 13.5 13.5z"></path>
-                    </svg>
-                  ) : (
-                    <svg 
-                      className="w-4 h-4 text-white transition-transform duration-200 hover:translate-x-0.5" 
-                      fill="currentColor" 
-                      viewBox="0 0 24 24"
-                    >
-                      <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-                    </svg>
-                  )}
-                </button>
+                <div className="button-wrapper-shadow">
+                  <div className="tooltip-container">
+                    <div className="waveform-display" onClick={handleMicrophoneClick}>
+                      <img 
+                        alt="microphone" 
+                        loading="lazy" 
+                        width="20" 
+                        height="20" 
+                        decoding="async" 
+                        src="/microphone-icon.svg" 
+                        className="text-gray-500 hover:text-gray-700 transition-colors cursor-pointer"
+                      />
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleSend}
+                    disabled={!inputValue.trim() || isLoading}
+                    className="send-button"
+                  >
+                    {isLoading ? (
+                      <svg className="w-4 h-4 animate-spin text-white" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="m100-200c0-8.284-6.716-15-15-15-8.284 0-15 6.716-15 15 0 8.284 6.716 15 15 15 8.284 0 15-6.716 15-15zm-1.5 0c0 7.456-6.044 13.5-13.5 13.5-7.456 0-13.5-6.044-13.5-13.5 0-7.456 6.044-13.5 13.5-13.5 7.456 0 13.5 6.044 13.5 13.5z"></path>
+                      </svg>
+                    ) : (
+                      <img 
+                        alt="send" 
+                        loading="lazy" 
+                        width="16" 
+                        height="16" 
+                        decoding="async" 
+                        src="/send.svg" 
+                        className="text-white"
+                      />
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Itinerary Column - Right Side (60%) - Shows when two columns active */}
+      {/* Itinerary Column - Right Side (55%) - Shows when two columns active */}
       {showTwoColumns && (
-        <div className={`flex flex-col lg:w-3/5 bg-gray-50 transition-all duration-300 ease-out ${
-          isTransitioning ? 'opacity-0 translate-x-4' : 'opacity-100 translate-x-0'
-        }`}>
+        <div className="flex flex-col lg:w-1/2 bg-white rounded-2xl layla-shadow-medium m-4 overflow-hidden">
         {(() => {
           switch (conversationPhase) {
             case 'initial':
               return (
-                <div className="flex-1 flex items-center justify-center">
-                  <div className="text-center max-w-md mx-auto px-6">
+                <div className="flex-1 flex items-center justify-center p-6">
+                  <div className="text-center max-w-md mx-auto">
                     <div className="w-24 h-24 layla-gradient rounded-full flex items-center justify-center mx-auto mb-6">
                       <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -923,7 +1023,6 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
                 <IncrementalTripPlan
                   loadingPhase="complete"
                   tripData={currentTripPlan}
-                  phaseMessage=""
                   sectionLoadingStates={sectionLoadingStates}
                   isFollowUpQuery={isFollowUp}
                 />
@@ -937,7 +1036,6 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
                 <IncrementalTripPlan
                   loadingPhase={loadingPhase}
                   tripData={currentTripPlan || undefined}
-                  phaseMessage={phaseMessage}
                   sectionLoadingStates={sectionLoadingStates}
                   isFollowUpQuery={isFollowUp}
                 />

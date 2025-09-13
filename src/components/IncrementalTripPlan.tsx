@@ -11,7 +11,6 @@ type LoadingPhase = 'idle' | 'analyzing' | 'flights' | 'hotels' | 'activities' |
 interface IncrementalTripPlanProps {
   loadingPhase: LoadingPhase;
   tripData?: TripPlanData;
-  phaseMessage: string;
   sectionLoadingStates?: SectionLoadingState[];
   isFollowUpQuery?: boolean;
 }
@@ -19,7 +18,6 @@ interface IncrementalTripPlanProps {
 const IncrementalTripPlan: React.FC<IncrementalTripPlanProps> = ({ 
   loadingPhase, 
   tripData, 
-  phaseMessage,
   sectionLoadingStates = [],
   isFollowUpQuery = false
 }) => {
@@ -117,6 +115,65 @@ const IncrementalTripPlan: React.FC<IncrementalTripPlanProps> = ({
   const renderFlightSection = () => {
     const isFlightLoading = isSectionLoading('flights');
     const flightLoadingMessage = getSectionLoadingMessage('flights');
+    
+    // Show skeleton during initial loading phases
+    if (loadingPhase === 'flights' || loadingPhase === 'hotels' || loadingPhase === 'activities' || loadingPhase === 'complete') {
+      if (!tripData?.flights) {
+        return (
+          <div className="p-6 pb-8">
+            <div className="bg-white rounded-2xl shadow-lg p-8 transition-all duration-500">
+              <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center">
+                  <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mr-4">
+                    <div className="w-6 h-6 bg-blue-200 rounded animate-pulse"></div>
+                  </div>
+                  <div>
+                    <div className="h-7 bg-gray-200 rounded w-24 mb-2 animate-pulse"></div>
+                    <div className="h-4 bg-gray-100 rounded w-32 animate-pulse"></div>
+                  </div>
+                </div>
+                <div className="h-6 bg-gray-200 rounded w-20 animate-pulse"></div>
+              </div>
+              
+              {/* Flight skeleton cards */}
+              {[1, 2].map((_, index) => (
+                <div key={index} className={`border rounded-xl p-6 ${index > 0 ? 'mt-4' : ''}`}>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center">
+                      <div className="w-10 h-10 bg-gray-200 rounded-lg mr-4 animate-pulse"></div>
+                      <div>
+                        <div className="h-5 bg-gray-200 rounded w-24 mb-2 animate-pulse"></div>
+                        <div className="h-4 bg-gray-100 rounded w-16 animate-pulse"></div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="h-6 bg-gray-200 rounded w-16 mb-1 animate-pulse"></div>
+                      <div className="h-4 bg-gray-100 rounded w-12 animate-pulse"></div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-8">
+                      <div>
+                        <div className="h-6 bg-gray-200 rounded w-12 mb-1 animate-pulse"></div>
+                        <div className="h-4 bg-gray-100 rounded w-8 animate-pulse"></div>
+                      </div>
+                      <div className="flex-1 flex items-center justify-center">
+                        <div className="h-1 bg-gray-200 w-24 animate-pulse"></div>
+                      </div>
+                      <div>
+                        <div className="h-6 bg-gray-200 rounded w-12 mb-1 animate-pulse"></div>
+                        <div className="h-4 bg-gray-100 rounded w-8 animate-pulse"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      }
+    }
     
     // Show targeted loading for follow-up queries
     if (isFollowUpQuery && isFlightLoading && tripData?.flights) {
@@ -361,6 +418,65 @@ const IncrementalTripPlan: React.FC<IncrementalTripPlanProps> = ({
     const isHotelLoading = isSectionLoading('hotels');
     const hotelLoadingMessage = getSectionLoadingMessage('hotels');
     
+    // Show skeleton during initial loading phases
+    if (loadingPhase === 'hotels' || loadingPhase === 'activities' || loadingPhase === 'complete') {
+      if (!tripData?.hotels) {
+        return (
+          <div className="p-6 pb-8">
+            <div className="bg-white rounded-2xl shadow-lg p-8 transition-all duration-500">
+              <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center">
+                  <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center mr-4">
+                    <div className="w-6 h-6 bg-emerald-200 rounded animate-pulse"></div>
+                  </div>
+                  <div>
+                    <div className="h-7 bg-gray-200 rounded w-20 mb-2 animate-pulse"></div>
+                    <div className="h-4 bg-gray-100 rounded w-36 animate-pulse"></div>
+                  </div>
+                </div>
+                <div className="h-6 bg-gray-200 rounded w-24 animate-pulse"></div>
+              </div>
+              
+              {/* Hotel skeleton cards */}
+              {[1, 2].map((_, index) => (
+                <div key={index} className={`border rounded-xl overflow-hidden ${index > 0 ? 'mt-6' : ''}`}>
+                  <div className="flex">
+                    <div className="w-48 h-32 bg-gray-200 animate-pulse"></div>
+                    <div className="flex-1 p-6">
+                      <div className="flex justify-between items-start mb-3">
+                        <div>
+                          <div className="h-6 bg-gray-200 rounded w-32 mb-2 animate-pulse"></div>
+                          <div className="flex items-center mb-2">
+                            <div className="flex space-x-1 mr-2">
+                              {[1, 2, 3, 4, 5].map((star) => (
+                                <div key={star} className="w-4 h-4 bg-gray-200 rounded animate-pulse"></div>
+                              ))}
+                            </div>
+                            <div className="h-4 bg-gray-100 rounded w-16 animate-pulse"></div>
+                          </div>
+                          <div className="h-4 bg-gray-100 rounded w-24 animate-pulse"></div>
+                        </div>
+                        <div className="text-right">
+                          <div className="h-6 bg-gray-200 rounded w-16 mb-1 animate-pulse"></div>
+                          <div className="h-4 bg-gray-100 rounded w-12 animate-pulse"></div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex flex-wrap gap-2 mb-3">
+                        {[1, 2, 3].map((_, amenityIndex) => (
+                          <div key={amenityIndex} className="h-6 bg-gray-100 rounded-full w-16 animate-pulse"></div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      }
+    }
+    
     // Show targeted loading for follow-up queries
     if (isFollowUpQuery && isHotelLoading && tripData?.hotels) {
       return (
@@ -569,6 +685,66 @@ const IncrementalTripPlan: React.FC<IncrementalTripPlanProps> = ({
     const isActivityLoading = isSectionLoading('activities');
     const activityLoadingMessage = getSectionLoadingMessage('activities');
     
+    // Show skeleton during initial loading phases
+    if (loadingPhase === 'activities' || loadingPhase === 'complete') {
+      if (!tripData?.itinerary) {
+        return (
+          <div className="p-6 pb-8">
+            <div className="bg-white rounded-2xl shadow-lg p-8 transition-all duration-500">
+              <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center">
+                  <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center mr-4">
+                    <div className="w-6 h-6 bg-purple-200 rounded animate-pulse"></div>
+                  </div>
+                  <div>
+                    <div className="h-7 bg-gray-200 rounded w-32 mb-2 animate-pulse"></div>
+                    <div className="h-4 bg-gray-100 rounded w-40 animate-pulse"></div>
+                  </div>
+                </div>
+                <div className="h-6 bg-gray-200 rounded w-28 animate-pulse"></div>
+              </div>
+              
+              {/* Day skeleton cards */}
+              {[1, 2, 3].map((_, dayIndex) => (
+                <div key={dayIndex} className={`border rounded-xl p-6 ${dayIndex > 0 ? 'mt-6' : ''}`}>
+                  <div className="flex items-center mb-6">
+                    <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mr-4">
+                      <div className="w-6 h-6 bg-purple-200 rounded animate-pulse"></div>
+                    </div>
+                    <div>
+                      <div className="h-6 bg-gray-200 rounded w-16 mb-2 animate-pulse"></div>
+                      <div className="h-4 bg-gray-100 rounded w-24 animate-pulse"></div>
+                    </div>
+                  </div>
+                  
+                  {/* Activity skeletons */}
+                  <div className="space-y-4 ml-16">
+                    {[1, 2, 3].map((_, activityIndex) => (
+                      <div key={activityIndex} className="flex items-start">
+                        <div className="w-16 h-16 bg-gray-200 rounded-lg mr-4 animate-pulse"></div>
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="h-5 bg-gray-200 rounded w-32 animate-pulse"></div>
+                            <div className="h-4 bg-gray-100 rounded w-12 animate-pulse"></div>
+                          </div>
+                          <div className="h-4 bg-gray-100 rounded w-48 mb-2 animate-pulse"></div>
+                          <div className="flex items-center space-x-4">
+                            <div className="h-4 bg-gray-100 rounded w-16 animate-pulse"></div>
+                            <div className="h-4 bg-gray-100 rounded w-20 animate-pulse"></div>
+                            <div className="h-4 bg-gray-100 rounded w-12 animate-pulse"></div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      }
+    }
+    
     // Show targeted loading for follow-up queries
     if (isFollowUpQuery && isActivityLoading && tripData?.itinerary) {
       return (
@@ -727,7 +903,7 @@ const IncrementalTripPlan: React.FC<IncrementalTripPlanProps> = ({
                         {/* Activities */}
                         <div className="space-y-4">
                           {day.activities.map((activity, activityIndex) => (
-                            <div key={activity.id} className="flex items-start space-x-4 p-4 bg-white rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-all duration-200">
+                            <div key={`${dayIndex}-${activityIndex}-${activity.id || activity.name}`} className="flex items-start space-x-4 p-4 bg-white rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-all duration-200">
                               {/* Activity image */}
                               <div className="flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden relative">
                                 <ImageWithFallback
@@ -816,39 +992,225 @@ const IncrementalTripPlan: React.FC<IncrementalTripPlanProps> = ({
     return null;
   };
 
-  const renderLoadingMessage = () => {
-    if (loadingPhase !== 'complete' && loadingPhase !== 'idle') {
-      return (
-        <div className="p-6">
-          <div className="bg-gradient-to-r from-teal-500 to-blue-600 rounded-2xl p-6 text-white text-center shadow-lg">
-            <div className="flex items-center justify-center mb-4">
-              <svg className="w-6 h-6 animate-spin mr-3" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="m100-200c0-8.284-6.716-15-15-15-8.284 0-15 6.716-15 15 0 8.284 6.716 15 15 15 8.284 0 15-6.716 15-15zm-1.5 0c0 7.456-6.044 13.5-13.5 13.5-7.456 0-13.5-6.044-13.5-13.5 0-7.456 6.044-13.5 13.5-13.5 7.456 0 13.5 6.044 13.5 13.5z"></path>
-              </svg>
-              <span className="text-xl font-bold">{phaseMessage}</span>
+  // Create a comprehensive full-page skeleton
+  const renderFullPageSkeleton = () => {
+    if (loadingPhase === 'idle' || loadingPhase === 'complete') {
+      return null;
+    }
+
+    return (
+      <div className="h-full overflow-y-auto scrollbar-hide bg-gray-50">
+        {/* Header Skeleton */}
+        <div className="relative h-80 overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-slate-400 via-slate-500 to-slate-600 animate-pulse">
+            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
+          </div>
+          <div className="relative h-full flex flex-col justify-end p-8">
+            <div className="animate-pulse">
+              <div className="h-12 bg-white/20 rounded-lg w-1/2 mb-4"></div>
+              <div className="flex flex-wrap gap-3 mb-6">
+                <div className="h-8 bg-white/20 rounded-full w-32"></div>
+                <div className="h-8 bg-white/20 rounded-full w-28"></div>
+                <div className="h-8 bg-white/20 rounded-full w-36"></div>
+              </div>
             </div>
-            <div className="bg-white/20 backdrop-blur-sm rounded-full h-3 max-w-sm mx-auto">
-              <div 
-                className="bg-white rounded-full h-3 transition-all duration-1000 ease-out shadow-sm"
-                style={{ 
-                  width: `${
-                    loadingPhase === 'analyzing' ? 20 : 
-                    loadingPhase === 'flights' ? 40 : 
-                    loadingPhase === 'hotels' ? 60 : 
-                    loadingPhase === 'activities' ? 80 : 100
-                  }%` 
-                }}
-              />
-            </div>
-            <div className="mt-3 text-sm text-white/80">
-              Building your perfect trip...
+            <div className="absolute top-6 right-6">
+              <div className="h-12 bg-white/20 rounded-xl w-36"></div>
             </div>
           </div>
         </div>
-      );
-    }
-    return null;
+
+        {/* Flights Section Skeleton */}
+        <div className="p-6 pb-8">
+          <div className="bg-white rounded-2xl shadow-lg p-8 transition-all duration-500">
+            <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center">
+                <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mr-4">
+                  <div className="w-6 h-6 bg-blue-200 rounded animate-pulse"></div>
+                </div>
+                <div>
+                  <div className="h-7 bg-gray-200 rounded w-24 mb-2 animate-pulse"></div>
+                  <div className="h-4 bg-gray-100 rounded w-32 animate-pulse"></div>
+                </div>
+              </div>
+              <div className="h-6 bg-gray-200 rounded w-20 animate-pulse"></div>
+            </div>
+            
+            {/* Multiple flight skeleton cards */}
+            {[1, 2, 3].map((_, index) => (
+              <div key={index} className={`border rounded-xl p-6 ${index > 0 ? 'mt-4' : ''}`}>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center">
+                    <div className="w-10 h-10 bg-gray-200 rounded-lg mr-4 animate-pulse"></div>
+                    <div>
+                      <div className="h-5 bg-gray-200 rounded w-24 mb-2 animate-pulse"></div>
+                      <div className="h-4 bg-gray-100 rounded w-16 animate-pulse"></div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="h-6 bg-gray-200 rounded w-16 mb-1 animate-pulse"></div>
+                    <div className="h-4 bg-gray-100 rounded w-12 animate-pulse"></div>
+                  </div>
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-8">
+                    <div>
+                      <div className="h-6 bg-gray-200 rounded w-12 mb-1 animate-pulse"></div>
+                      <div className="h-4 bg-gray-100 rounded w-8 animate-pulse"></div>
+                    </div>
+                    <div className="flex-1 flex items-center justify-center">
+                      <div className="h-1 bg-gray-200 w-24 animate-pulse"></div>
+                    </div>
+                    <div>
+                      <div className="h-6 bg-gray-200 rounded w-12 mb-1 animate-pulse"></div>
+                      <div className="h-4 bg-gray-100 rounded w-8 animate-pulse"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Hotels Section Skeleton */}
+        <div className="p-6 pb-8">
+          <div className="bg-white rounded-2xl shadow-lg p-8 transition-all duration-500">
+            <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center">
+                <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center mr-4">
+                  <div className="w-6 h-6 bg-emerald-200 rounded animate-pulse"></div>
+                </div>
+                <div>
+                  <div className="h-7 bg-gray-200 rounded w-20 mb-2 animate-pulse"></div>
+                  <div className="h-4 bg-gray-100 rounded w-36 animate-pulse"></div>
+                </div>
+              </div>
+              <div className="h-6 bg-gray-200 rounded w-24 animate-pulse"></div>
+            </div>
+            
+            {/* Multiple hotel skeleton cards */}
+            {[1, 2, 3].map((_, index) => (
+              <div key={index} className={`border rounded-xl overflow-hidden ${index > 0 ? 'mt-6' : ''}`}>
+                <div className="flex">
+                  <div className="w-48 h-32 bg-gray-200 animate-pulse"></div>
+                  <div className="flex-1 p-6">
+                    <div className="flex justify-between items-start mb-3">
+                      <div>
+                        <div className="h-6 bg-gray-200 rounded w-32 mb-2 animate-pulse"></div>
+                        <div className="flex items-center mb-2">
+                          <div className="flex space-x-1 mr-2">
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <div key={star} className="w-4 h-4 bg-gray-200 rounded animate-pulse"></div>
+                            ))}
+                          </div>
+                          <div className="h-4 bg-gray-100 rounded w-16 animate-pulse"></div>
+                        </div>
+                        <div className="h-4 bg-gray-100 rounded w-24 animate-pulse"></div>
+                      </div>
+                      <div className="text-right">
+                        <div className="h-6 bg-gray-200 rounded w-16 mb-1 animate-pulse"></div>
+                        <div className="h-4 bg-gray-100 rounded w-12 animate-pulse"></div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      {[1, 2, 3].map((_, amenityIndex) => (
+                        <div key={amenityIndex} className="h-6 bg-gray-100 rounded-full w-16 animate-pulse"></div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Activities/Itinerary Section Skeleton */}
+        <div className="p-6 pb-8">
+          <div className="bg-white rounded-2xl shadow-lg p-8 transition-all duration-500">
+            <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center">
+                <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center mr-4">
+                  <div className="w-6 h-6 bg-purple-200 rounded animate-pulse"></div>
+                </div>
+                <div>
+                  <div className="h-7 bg-gray-200 rounded w-32 mb-2 animate-pulse"></div>
+                  <div className="h-4 bg-gray-100 rounded w-40 animate-pulse"></div>
+                </div>
+              </div>
+              <div className="h-6 bg-gray-200 rounded w-28 animate-pulse"></div>
+            </div>
+            
+            {/* Multiple day skeleton cards */}
+            {[1, 2, 3, 4, 5].map((_, dayIndex) => (
+              <div key={dayIndex} className={`border rounded-xl p-6 ${dayIndex > 0 ? 'mt-6' : ''}`}>
+                <div className="flex items-center mb-6">
+                  <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mr-4">
+                    <div className="w-6 h-6 bg-purple-200 rounded animate-pulse"></div>
+                  </div>
+                  <div>
+                    <div className="h-6 bg-gray-200 rounded w-16 mb-2 animate-pulse"></div>
+                    <div className="h-4 bg-gray-100 rounded w-24 animate-pulse"></div>
+                  </div>
+                </div>
+                
+                {/* Activity skeletons */}
+                <div className="space-y-4 ml-16">
+                  {[1, 2, 3].map((_, activityIndex) => (
+                    <div key={activityIndex} className="flex items-start">
+                      <div className="w-16 h-16 bg-gray-200 rounded-lg mr-4 animate-pulse"></div>
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="h-5 bg-gray-200 rounded w-32 animate-pulse"></div>
+                          <div className="h-4 bg-gray-100 rounded w-12 animate-pulse"></div>
+                        </div>
+                        <div className="h-4 bg-gray-100 rounded w-48 mb-2 animate-pulse"></div>
+                        <div className="flex items-center space-x-4">
+                          <div className="h-4 bg-gray-100 rounded w-16 animate-pulse"></div>
+                          <div className="h-4 bg-gray-100 rounded w-20 animate-pulse"></div>
+                          <div className="h-4 bg-gray-100 rounded w-12 animate-pulse"></div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Cost Summary Skeleton */}
+        <div className="p-6 pb-8">
+          <div className="bg-white rounded-2xl shadow-lg p-8 transition-all duration-500">
+            <div className="flex items-center justify-between mb-8">
+              <div className="flex items-center">
+                <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center mr-4">
+                  <div className="w-6 h-6 bg-green-200 rounded animate-pulse"></div>
+                </div>
+                <div>
+                  <div className="h-7 bg-gray-200 rounded w-28 mb-2 animate-pulse"></div>
+                  <div className="h-4 bg-gray-100 rounded w-36 animate-pulse"></div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="space-y-4">
+              {['Flights', 'Hotels', 'Activities'].map((_, index) => (
+                <div key={index} className="flex justify-between items-center py-3 border-b border-gray-100">
+                  <div className="h-5 bg-gray-200 rounded w-20 animate-pulse"></div>
+                  <div className="h-5 bg-gray-200 rounded w-16 animate-pulse"></div>
+                </div>
+              ))}
+              <div className="flex justify-between items-center pt-4 border-t-2 border-gray-200">
+                <div className="h-6 bg-gray-300 rounded w-24 animate-pulse"></div>
+                <div className="h-6 bg-gray-300 rounded w-20 animate-pulse"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   if (loadingPhase === 'idle') {
@@ -882,9 +1244,13 @@ const IncrementalTripPlan: React.FC<IncrementalTripPlanProps> = ({
     );
   }
 
+  // Show full page skeleton during loading phases
+  if (loadingPhase === 'analyzing' || loadingPhase === 'flights' || loadingPhase === 'hotels' || loadingPhase === 'activities') {
+    return renderFullPageSkeleton();
+  }
+
   return (
     <div className="h-full overflow-y-auto scrollbar-hide bg-gray-50">
-      {renderLoadingMessage()}
       {renderDestinationHeader()}
       {renderFlightSection()}
       {renderHotelSection()}

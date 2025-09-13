@@ -4,10 +4,10 @@ import React from 'react';
 
 const DesigningTrip: React.FC = () => {
   const features = [
+    "Add hidden gems, not tourist traps",
+    "Download itinerary pdf",
     "Share with your companions",
-    "Save hours of planning", 
-    "Share your trip idea",
-    "Bring it to real with ease"
+    "Save hours of planning"
   ];
 
   return (
@@ -35,17 +35,20 @@ const DesigningTrip: React.FC = () => {
           Designing your trip...
         </h2>
 
-        {/* Animated Features */}
-        <div className="space-y-4">
+        {/* Text Fade Conveyor */}
+        <div className="relative h-16 flex items-center justify-center">
           {features.map((feature, index) => (
             <div 
               key={index}
-              className={`flex items-center justify-center p-4 layla-card rounded-xl animate-conveyer-${index + 1}`}
+              className="absolute inset-0 flex items-center justify-center animate-text-conveyor"
+              style={{
+                animationDelay: `${index * 3}s`,
+                animationDuration: '12s'
+              }}
             >
-              <div className="flex items-center space-x-3">
-                <div className="w-2 h-2 layla-gradient rounded-full animate-pulse"></div>
-                <span className="layla-text-primary font-medium">{feature}</span>
-              </div>
+              <span className="text-gray-600 font-medium text-center px-4">
+                {feature}
+              </span>
             </div>
           ))}
         </div>
