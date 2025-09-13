@@ -372,68 +372,58 @@ body {
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
 }
 
-/* Button Wrapper and Components */
-.button-wrapper-shadow {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 4px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(10px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  transition: all 0.2s ease-in-out;
-}
-
-.tooltip-container {
-  position: relative;
+/* Clean Button Styles */
+.mic-button {
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.waveform-display {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  transition: background-color 0.2s ease-in-out;
-  cursor: pointer;
-}
-
-.waveform-display:hover {
-  background-color: rgba(0, 0, 0, 0.05);
-}
-
-.send-button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  background: linear-gradient(135deg, #00d4aa 0%, #0ea5e9 100%);
+  width: 36px;
+  height: 36px;
+  background: none;
   border: none;
-  border-radius: 8px;
+  border-radius: 50%;
   cursor: pointer;
   transition: all 0.2s ease-in-out;
-  box-shadow: 0 2px 4px rgba(0, 212, 170, 0.3);
 }
 
-.send-button:hover:not(:disabled) {
+.mic-button:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.mic-button:active {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.send-button-clean {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: #3b82f6;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+}
+
+.send-button-clean:hover:not(:disabled) {
+  background: #2563eb;
   transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(0, 212, 170, 0.4);
+  box-shadow: 0 4px 8px rgba(59, 130, 246, 0.4);
 }
 
-.send-button:disabled {
+.send-button-clean:disabled {
   opacity: 0.5;
   cursor: not-allowed;
   transform: none;
+  background: #9ca3af;
 }
 
-.send-button:active:not(:disabled) {
+.send-button-clean:active:not(:disabled) {
   transform: translateY(0);
+  background: #1d4ed8;
 }
 
 /* Travel Header Styles */

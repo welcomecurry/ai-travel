@@ -51,7 +51,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
       <div className="flex flex-col max-w-lg">
         <div className={`px-5 py-4 rounded-2xl break-words ${
           isUser 
-            ? 'layla-gradient text-white rounded-br-lg shadow-sm' 
+            ? 'bg-blue-500 text-white rounded-br-lg shadow-sm' 
             : 'bg-gray-50 border border-gray-100 text-gray-700 rounded-bl-lg shadow-sm'
         }`}>
           {message.isStreaming ? (
@@ -878,7 +878,7 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
       {/* Chat Column - Left Side (responsive width) */}
       <div className={`flex flex-col bg-white layla-shadow-soft transition-all duration-300 ease-out ${
         showTwoColumns 
-          ? 'w-full lg:w-1/2' 
+          ? 'w-full lg:w-3/5' 
           : 'w-full'
       }`}>
 
@@ -937,24 +937,25 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
                     disabled={isLoading}
                   />
                 </div>
-                <div className="button-wrapper-shadow">
-                  <div className="tooltip-container">
-                    <div className="waveform-display" onClick={handleMicrophoneClick}>
-                      <img 
-                        alt="microphone" 
-                        loading="lazy" 
-                        width="20" 
-                        height="20" 
-                        decoding="async" 
-                        src="/microphone-icon.svg" 
-                        className="text-gray-500 hover:text-gray-700 transition-colors cursor-pointer"
-                      />
-                    </div>
-                  </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={handleMicrophoneClick}
+                    className="mic-button"
+                  >
+                    <img 
+                      alt="microphone" 
+                      loading="lazy" 
+                      width="18" 
+                      height="18" 
+                      decoding="async" 
+                      src="/microphone-icon.svg" 
+                      className="text-gray-400"
+                    />
+                  </button>
                   <button
                     onClick={handleSend}
                     disabled={!inputValue.trim() || isLoading}
-                    className="send-button"
+                    className="send-button-clean"
                   >
                     {isLoading ? (
                       <svg className="w-4 h-4 animate-spin text-white" fill="none" viewBox="0 0 24 24">
@@ -962,15 +963,9 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
                         <path className="opacity-75" fill="currentColor" d="m100-200c0-8.284-6.716-15-15-15-8.284 0-15 6.716-15 15 0 8.284 6.716 15 15 15 8.284 0 15-6.716 15-15zm-1.5 0c0 7.456-6.044 13.5-13.5 13.5-7.456 0-13.5-6.044-13.5-13.5 0-7.456 6.044-13.5 13.5-13.5 7.456 0 13.5 6.044 13.5 13.5z"></path>
                       </svg>
                     ) : (
-                      <img 
-                        alt="send" 
-                        loading="lazy" 
-                        width="16" 
-                        height="16" 
-                        decoding="async" 
-                        src="/send.svg" 
-                        className="text-white"
-                      />
+                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                      </svg>
                     )}
                   </button>
                 </div>
@@ -982,7 +977,7 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
 
       {/* Itinerary Column - Right Side (55%) - Shows when two columns active */}
       {showTwoColumns && (
-        <div className="flex flex-col lg:w-1/2 bg-white rounded-2xl layla-shadow-medium m-4 overflow-hidden">
+        <div className="flex flex-col lg:w-full rounded-2xl layla-shadow-medium m-4 overflow-hidden" style={{ backgroundColor: '#e9f6f7' }}>
         {(() => {
           switch (conversationPhase) {
             case 'initial':
