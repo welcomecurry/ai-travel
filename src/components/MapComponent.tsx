@@ -44,7 +44,7 @@ const MapComponent: React.FC<MapComponentProps> = ({ center, locations, visibleL
     <MapContainer
       center={center}
       zoom={13}
-      style={{ height: '100%', width: '100%' }}
+      style={{ height: '100%', width: '100%', borderRadius: '12px' }}
       zoomControl={true}
       {...({} as any)}
     >

@@ -84,11 +84,42 @@ const DestinationMap: React.FC<DestinationMapProps> = ({ tripData }) => {
       'new york': [40.7128, -74.0060],
       'barcelona': [41.3851, 2.1734],
       'amsterdam': [52.3676, 4.9041],
-      'berlin': [52.5200, 13.4050]
+      'berlin': [52.5200, 13.4050],
+      'puerto vallarta': [20.6534, -105.2253],
+      'vallarta': [20.6534, -105.2253],
+      'mexico': [19.4326, -99.1332],
+      'cancun': [21.1619, -86.8515],
+      'bali': [-8.3405, 115.0920],
+      'thailand': [13.7563, 100.5018],
+      'bangkok': [13.7563, 100.5018],
+      'dubai': [25.2048, 55.2708],
+      'singapore': [1.3521, 103.8198],
+      'hong kong': [22.3193, 114.1694],
+      'sydney': [-33.8688, 151.2093],
+      'melbourne': [-37.8136, 144.9631],
+      'los angeles': [34.0522, -118.2437],
+      'san francisco': [37.7749, -122.4194],
+      'miami': [25.7617, -80.1918]
     };
 
-    const key = destination?.toLowerCase() || 'paris';
-    return coordinates[key] || [48.8566, 2.3522];
+    if (!destination) return [48.8566, 2.3522]; // Default to Paris
+    
+    const key = destination.toLowerCase().trim();
+    
+    // Try exact match first
+    if (coordinates[key]) {
+      return coordinates[key];
+    }
+    
+    // Try partial matches for compound names
+    for (const [cityKey, coords] of Object.entries(coordinates)) {
+      if (key.includes(cityKey) || cityKey.includes(key)) {
+        return coords;
+      }
+    }
+    
+    console.log(`⚠️ No coordinates found for destination: "${destination}", defaulting to Paris`);
+    return [48.8566, 2.3522]; // Default fallback
   };
 
   // Generate map locations from trip data
@@ -148,6 +179,13 @@ const DestinationMap: React.FC<DestinationMapProps> = ({ tripData }) => {
   const mapPosition = getDestinationCoordinates(tripData?.destination);
   const mapLocations = generateMapLocations();
 
+  // Debug logging
+  console.log('🗺️ DestinationMap Debug:', {
+    destination: tripData?.destination,
+    coordinates: mapPosition,
+    locationsCount: mapLocations.length
+  });
+
   const toggleLayer = (layer: keyof typeof visibleLayers) => {
     setVisibleLayers(prev => ({
       ...prev,
@@ -185,7 +223,7 @@ const DestinationMap: React.FC<DestinationMapProps> = ({ tripData }) => {
   return (
     <div className="h-full flex flex-col">
       {/* Map Header */}
-      <div className="p-4 border-b bg-white">
+      <div className="p-4 bg-white rounded-lg">
         <h3 className="font-semibold text-lg" style={{color: '#1f2937'}}>Map</h3>
         <p className="text-sm" style={{color: '#6b7280'}}>{tripData?.destination || 'Paris, France'}</p>
       </div>
@@ -203,7 +241,7 @@ const DestinationMap: React.FC<DestinationMapProps> = ({ tripData }) => {
       </div>
 
       {/* Map Controls */}
-      <div className="p-4 border-t bg-white">
+      <div className="p-4 bg-white rounded-lg">
         <div className="flex flex-wrap gap-2 mb-3">
           <button
             className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm transition-all ${

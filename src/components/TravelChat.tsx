@@ -8,6 +8,7 @@ import TypewriterText from './TypewriterText';
 import IncrementalTripPlan from './IncrementalTripPlan';
 import TripPlanLayout from './TripPlanLayout';
 import DestinationMap from './DestinationMap';
+import QuickActionsSection from './QuickActionsSection';
 import { analyzeQuery, isFollowUpQuery, createSectionLoadingState, SectionLoadingState } from '../lib/queryDetection';
 
 interface Message {
@@ -140,6 +141,10 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
   const [showTwoColumns, setShowTwoColumns] = useState(true);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Quick Actions state
+  const [tripsLeft, setTripsLeft] = useState(3);
+  const [quickSuggestions, setQuickSuggestions] = useState<string[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -166,6 +171,60 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
            message.toLowerCase().includes('berlin') ? 'Berlin' :
            'your destination';
   };
+
+  // Generate contextual quick action suggestions
+  const generateQuickSuggestions = (): string[] => {
+    if (conversationPhase === 'initial') {
+      return [
+        "Plan a weekend in Paris",
+        "7-day Japan adventure", 
+        "Romantic getaway to Italy",
+        "Family trip to Disney World"
+      ];
+    }
+    
+    if (conversationPhase === 'complete' && currentTripPlan) {
+      const destination = currentTripPlan.destination || 'destination';
+      return [
+        `Add more activities in ${destination}`,
+        "Find cheaper hotel options",
+        "Extend trip by 2 days",
+        "Add restaurant recommendations"
+      ];
+    }
+    
+    if (conversationPhase === 'generating') {
+      return [
+        "Make it more budget-friendly",
+        "Add luxury experiences", 
+        "Focus on local culture",
+        "Include adventure activities"
+      ];
+    }
+    
+    return [];
+  };
+
+  // Handle quick suggestion clicks
+  const handleSuggestionClick = (suggestion: string) => {
+    setInputValue(suggestion);
+    // Auto-send the suggestion
+    setTimeout(() => {
+      handleSend();
+    }, 100);
+  };
+
+  // Handle premium upgrade click
+  const handleUpgradeClick = () => {
+    // This would typically open a modal or navigate to pricing page
+    console.log('Upgrade clicked - would show pricing modal');
+    alert('Premium upgrade coming soon! Get unlimited trip plans.');
+  };
+
+  // Update suggestions when conversation phase changes
+  useEffect(() => {
+    setQuickSuggestions(generateQuickSuggestions());
+  }, [conversationPhase, currentTripPlan]);
 
   // Helper function to detect if conversational text contains trip data
   const detectTripDataInText = (text: string): boolean => {
@@ -899,9 +958,9 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
   return (
     <>
       {/* Desktop: Two or Three columns based on destination */}
-      <div className="hidden lg:flex h-full bg-[#e9f6f7] gap-0">
+      <div className="hidden lg:flex h-full bg-[#e9f6f7] gap-4 p-4">
         {/* Left Column - Chat (responsive width based on map visibility) */}
-        <div className={`flex flex-col bg-white layla-shadow-soft border-r border-gray-200 ${
+        <div className={`flex flex-col bg-white layla-shadow-soft rounded-xl ${
           (conversationPhase === 'generating' || conversationPhase === 'complete' || conversationPhase === 'follow_up') && currentTripPlan
             ? 'w-[30%]' 
             : 'w-[45%]'
@@ -945,8 +1004,16 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
           <div ref={messagesEndRef} />
         </div>
 
+        {/* Quick Actions Section */}
+        <QuickActionsSection
+          suggestions={quickSuggestions}
+          tripsLeft={tripsLeft}
+          onSuggestionClick={handleSuggestionClick}
+          onUpgradeClick={handleUpgradeClick}
+        />
+
         {/* Chat Input - Updated Style */}
-        <div className="bg-white border-t border-gray-100 px-6 py-4">
+        <div className="bg-white px-6 pb-4 rounded-lg">
           <div className="relative">
             <div className="prompt-input-container">
               <div className="flex items-center justify-between w-full gap-4">
@@ -1001,7 +1068,7 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
         </div>
 
         {/* Middle Column - Trip Details (responsive width based on map visibility) */}
-        <div className={`bg-gray-50 overflow-y-auto ${
+        <div className={`bg-white rounded-xl shadow-sm overflow-y-auto ${
           (conversationPhase === 'generating' || conversationPhase === 'complete' || conversationPhase === 'follow_up') && currentTripPlan
             ? 'w-[45%]' 
             : 'w-[55%]'
@@ -1051,6 +1118,15 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
               );
             
             case 'generating':
+              return (
+                <IncrementalTripPlan
+                  loadingPhase={loadingPhase}
+                  tripData={currentTripPlan || undefined}
+                  sectionLoadingStates={sectionLoadingStates}
+                  isFollowUpQuery={isFollowUp}
+                />
+              );
+              
             case 'complete':
               return currentTripPlan ? (
                 <TripPlanLayout tripData={currentTripPlan} />
@@ -1073,7 +1149,7 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
 
         {/* Right Column - Map (25%) - Only show when we have destination data */}
         {(conversationPhase === 'generating' || conversationPhase === 'complete' || conversationPhase === 'follow_up') && currentTripPlan && (
-          <div className="w-[25%] bg-white border-l border-gray-200">
+          <div className="w-[25%] bg-white rounded-xl shadow-sm">
             <DestinationMap tripData={currentTripPlan} />
           </div>
         )}
@@ -1094,8 +1170,16 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
             <div ref={messagesEndRef} />
           </div>
 
+          {/* Quick Actions Section */}
+          <QuickActionsSection
+            suggestions={quickSuggestions}
+            tripsLeft={tripsLeft}
+            onSuggestionClick={handleSuggestionClick}
+            onUpgradeClick={handleUpgradeClick}
+          />
+
           {/* Chat Input */}
-          <div className="px-6 py-4 border-t border-gray-100">
+          <div className="px-6 pb-4">
             <div className="prompt-input-container">
               <div className="flex items-end gap-3">
                 <div className="flex-1">
@@ -1221,6 +1305,15 @@ const TravelChat: React.FC<TravelChatProps> = ({ initialMessage }) => {
                       );
                     
                     case 'generating':
+                      return (
+                        <IncrementalTripPlan
+                          loadingPhase={loadingPhase}
+                          tripData={currentTripPlan || undefined}
+                          sectionLoadingStates={sectionLoadingStates}
+                          isFollowUpQuery={isFollowUp}
+                        />
+                      );
+                      
                     case 'complete':
                       return currentTripPlan ? (
                         <TripPlanLayout tripData={currentTripPlan} />

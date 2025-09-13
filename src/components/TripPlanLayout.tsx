@@ -241,20 +241,20 @@ const HotelsSection: React.FC<{ tripData: TripPlanData }> = ({ tripData }) => {
 
 const DailyItinerary: React.FC<{ tripData: TripPlanData }> = ({ tripData }) => {
   const itinerary = tripData?.itinerary || [];
-  const [expandedDays, setExpandedDays] = React.useState<Set<number>>(new Set());
+  const [expandedDescriptions, setExpandedDescriptions] = React.useState<Set<number>>(new Set());
   
   if (itinerary.length === 0) {
     return null;
   }
 
-  const toggleDayExpansion = (dayIndex: number) => {
-    const newExpanded = new Set(expandedDays);
+  const toggleDescriptionExpansion = (dayIndex: number) => {
+    const newExpanded = new Set(expandedDescriptions);
     if (newExpanded.has(dayIndex)) {
       newExpanded.delete(dayIndex);
     } else {
       newExpanded.add(dayIndex);
     }
-    setExpandedDays(newExpanded);
+    setExpandedDescriptions(newExpanded);
   };
 
   const formatDate = (dayNumber: number) => {
@@ -277,206 +277,182 @@ const DailyItinerary: React.FC<{ tripData: TripPlanData }> = ({ tripData }) => {
     return 'Activity';
   };
 
+  const getActivityImage = (activity: any) => {
+    if (activity.image) return activity.image;
+    // Default images based on activity type
+    const type = getActivityType(activity).toLowerCase();
+    if (type === 'attraction') return 'https://images.unsplash.com/photo-1539650116574-75c0c6d73a0e?w=200&h=200&fit=crop';
+    return 'https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=200&h=200&fit=crop';
+  };
+
   return (
-    <div className="bg-white rounded-lg p-6">
-      <h3 className="text-lg font-semibold mb-6" style={{color: '#1f2937'}}>Daily Itinerary</h3>
+    <div className="bg-white rounded-lg p-4">
+      <h3 className="text-base font-semibold mb-4" style={{color: '#1f2937'}}>Daily Itinerary</h3>
       
       {itinerary.map((day, dayIdx) => {
-        const isExpanded = expandedDays.has(dayIdx);
+        const isDescriptionExpanded = expandedDescriptions.has(dayIdx);
         const dayDate = formatDate(day.day);
+        const description = day.description || `Start your day with a leisurely breakfast at a local café, then explore the ${day.activities?.[0]?.name || `best of ${tripData.destination}`} including various attractions and activities.`;
         
         return (
-          <div key={dayIdx} className="day-block mb-6">
-            {/* Day Header */}
-            <div className="day-header-block mb-4">
-              <div className="day-title-wrapper mb-3">
-                <div className="day-title-content">
-                  <h4 className="font-semibold text-lg mb-1" style={{color: '#1f2937'}}>
-                    Day {day.day}: {day.title || `${tripData.destination} Exploration`}
-                  </h4>
-                  <small style={{color: '#9ca3af'}}>{dayDate}</small>
-                </div>
-              </div>
-
-              {/* Expandable Day Overview */}
-              <div className="day-overview-wrapper">
-                <div 
-                  className={`day-overview-content transition-all duration-300 ${
-                    isExpanded ? 'max-h-none' : 'max-h-12 overflow-hidden'
-                  }`}
-                  style={{
-                    lineHeight: '24px',
-                    color: '#6b7280'
-                  }}
+          <div key={dayIdx} className="day-block mb-5 last:mb-0">
+            {/* Day Header in Grey Container */}
+            <div className="day-header bg-gray-50 rounded-lg p-2.5 mb-2.5 border border-gray-200">
+              <h4 className="font-semibold text-base mb-1" style={{color: '#1f2937'}}>
+                Day {day.day}: {day.title || `Explore ${tripData.destination} Historic Center`}
+              </h4>
+              <p className="text-xs mb-2" style={{color: '#6b7280'}}>{dayDate}</p>
+              
+              {/* Description with Read More */}
+              <div className="description-section">
+                <p className="text-gray-700 leading-snug text-xs">
+                  {isDescriptionExpanded ? description : `${description.substring(0, 100)}...`}
+                  {description.split(' ').some(word => word.toLowerCase().includes('café')) && !isDescriptionExpanded && (
+                    <span className="text-teal-500 underline cursor-pointer"> Café de Olla</span>
+                  )}
+                  {description.split(' ').some(word => word.toLowerCase().includes('historic')) && !isDescriptionExpanded && (
+                    <span className="text-teal-500 underline cursor-pointer"> Historic Center</span>
+                  )}
+                </p>
+                <button
+                  onClick={() => toggleDescriptionExpansion(dayIdx)}
+                  className="text-xs font-medium text-gray-600 hover:text-gray-800 mt-0.5"
+                  style={{background: 'none', border: 'none', cursor: 'pointer', padding: 0}}
                 >
-                  {day.description || `Explore the best of ${tripData.destination} with carefully curated activities including ${day.activities?.slice(0, 2).map(a => a.name).join(' and ')}${day.activities && day.activities.length > 2 ? ' among other amazing experiences' : ''}.`}
-                </div>
-                
-                {(day.description || day.activities?.length > 0) && (
-                  <button
-                    onClick={() => toggleDayExpansion(dayIdx)}
-                    className="read-more-button mt-2 text-sm font-medium transition-colors"
-                    style={{
-                      color: '#3b82f6',
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      padding: 0
-                    }}
-                  >
-                    {isExpanded ? '... Read less' : '... Read more'}
-                  </button>
-                )}
+                  {isDescriptionExpanded ? '... Read less' : '... Read more'}
+                </button>
               </div>
             </div>
 
-            {/* Day Separator */}
-            <div style={{width: '100%', height: '1px', backgroundColor: '#e5e7eb', margin: '16px 0'}}></div>
+            {/* Activities with Timeline Connectors */}
+            <div className="activities-timeline relative">
+              {/* Vertical Timeline Line */}
+              <div 
+                className="timeline-line absolute left-6 top-0 bottom-0 w-0.5 bg-gray-200"
+                style={{height: `${(day.activities?.length || 0) * 90 + 40}px`}}
+              ></div>
 
-            {/* Activities */}
-            <div className="day-activities">
               {day.activities?.map((activity, actIdx) => {
                 const activityType = getActivityType(activity);
                 
                 return (
-                  <React.Fragment key={`${day.day}-${actIdx}-${activity.id || activity.name}`}>
-                    <div className="activity-block">
-                      {/* Activity Label */}
-                      <div className="activity-header flex justify-between items-center mb-3">
-                        <p 
-                          className="activity-label text-sm font-medium"
-                          style={{
-                            color: activityType === 'Activity' ? '#059669' : '#7c3aed',
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.05em'
-                          }}
+                  <div key={`${day.day}-${actIdx}-${activity.id || activity.name}`} className="activity-item relative mb-3">
+                    {/* Timeline Dot */}
+                    <div 
+                      className="timeline-dot absolute left-5 top-4 w-2.5 h-2.5 rounded-full bg-white border-2 z-10"
+                      style={{borderColor: activityType === 'Activity' ? '#059669' : '#7c3aed'}}
+                    ></div>
+
+                    {/* Activity Type Label */}
+                    <div className="activity-type-label ml-12 mb-1">
+                      <span 
+                        className="inline-block text-xs font-medium px-2 py-0.5 rounded-full"
+                        style={{
+                          backgroundColor: activityType === 'Activity' ? '#fef3c7' : '#e0e7ff',
+                          color: activityType === 'Activity' ? '#d97706' : '#5b21b6'
+                        }}
+                      >
+                        {activityType}
+                      </span>
+                    </div>
+
+                    {/* Activity Card with Hover Actions */}
+                    <div 
+                      className="activity-card group bg-white border border-gray-200 rounded-lg p-3 ml-12 hover:shadow-md transition-all duration-200 cursor-pointer relative"
+                    >
+                      {/* Hover Action Icons */}
+                      <div className="action-icons absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex gap-1">
+                        <button 
+                          className="action-button p-1.5 rounded-full bg-white shadow-md hover:bg-gray-50 transition-colors"
+                          style={{border: '1px solid #e5e7eb'}}
+                          title="Delete activity"
                         >
-                          {activityType}
-                        </p>
-                        
-                        {/* Action Icons */}
-                        <div className="action-icons flex gap-2">
-                          <button 
-                            className="action-button p-1 rounded hover:bg-gray-100 transition-colors"
-                            style={{border: 'none', background: 'none', cursor: 'pointer'}}
-                            title="Delete activity"
-                          >
-                            <img alt="Delete" width="16" height="16" src="/trash.svg" style={{opacity: 0.6}} />
-                          </button>
-                          <button 
-                            className="action-button p-1 rounded hover:bg-gray-100 transition-colors"
-                            style={{border: 'none', background: 'none', cursor: 'pointer'}}
-                            title="Replace activity"
-                          >
-                            <img alt="Replace" width="16" height="16" src="/replace.svg" style={{opacity: 0.6}} />
-                          </button>
-                        </div>
+                          <img alt="Delete" width="12" height="12" src="/trash.svg" style={{opacity: 0.7}} />
+                        </button>
+                        <button 
+                          className="action-button p-1.5 rounded-full bg-white shadow-md hover:bg-gray-50 transition-colors"
+                          style={{border: '1px solid #e5e7eb'}}
+                          title="Replace activity"
+                        >
+                          <img alt="Replace" width="12" height="12" src="/replace.svg" style={{opacity: 0.7}} />
+                        </button>
                       </div>
 
-                      {/* Activity Card */}
-                      <div 
-                        className="activity-card flex gap-4 p-4 border rounded-lg hover:shadow-md transition-all duration-200 cursor-pointer"
-                        style={{borderColor: '#e5e7eb', backgroundColor: '#fafafa'}}
-                      >
-                        {/* Activity Photo */}
-                        <div className="activity-photo">
+                      <div className="flex items-center gap-3">
+                        {/* Activity Image */}
+                        <div className="activity-image">
                           <img 
                             alt={activity.name} 
-                            width="56" 
-                            height="56" 
-                            src={activity.image || 'https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=200&h=200&fit=crop'} 
+                            width="45" 
+                            height="45" 
+                            src={getActivityImage(activity)} 
                             className="rounded-lg object-cover" 
-                            style={{minWidth: '56px', minHeight: '56px'}} 
+                            style={{minWidth: '45px', minHeight: '45px'}} 
                           />
                         </div>
 
-                        {/* Activity Info */}
-                        <div className="activity-info-wrapper flex-1">
-                          <div className="activity-info-block">
-                            <h5 className="activity-title font-medium mb-1" style={{color: '#1f2937'}}>
-                              {activity.name}
-                            </h5>
-                            <div className="activity-meta flex items-center gap-2 text-sm" style={{color: '#6b7280'}}>
-                              <span className="duration-info flex items-center gap-1">
-                                <img alt="clock" width="12" height="12" src="/clock.svg" style={{opacity: 0.7}} />
-                                {activity.duration || '2 hours'}
-                              </span>
-                              <small className="separator">•</small>
-                              <span>1 person</span>
-                              {activity.price && (
-                                <>
-                                  <small className="separator">•</small>
-                                  <span className="price font-medium" style={{color: '#059669'}}>
-                                    ${activity.price}
-                                  </span>
-                                </>
+                        {/* Activity Details */}
+                        <div className="activity-details flex-1">
+                          <h5 className="activity-name font-medium text-sm mb-0.5" style={{color: '#1f2937'}}>
+                            {activity.name}
+                          </h5>
+                          <p className="activity-type text-xs mb-0.5" style={{color: '#6b7280'}}>
+                            {activityType}
+                          </p>
+                          {(activity.duration || activity.price) && (
+                            <div className="activity-meta flex items-center gap-2 text-xs" style={{color: '#6b7280'}}>
+                              {activity.duration && (
+                                <span className="duration-info flex items-center gap-1">
+                                  <img alt="clock" width="10" height="10" src="/clock.svg" style={{opacity: 0.7}} />
+                                  {activity.duration}
+                                </span>
                               )}
+                              {activity.duration && activity.price && <span>•</span>}
+                              {activity.price && <span>1 person</span>}
                             </div>
-                            {activity.description && (
-                              <p className="activity-description text-sm mt-2" style={{color: '#6b7280'}}>
-                                {activity.description}
-                              </p>
-                            )}
-                          </div>
+                          )}
                         </div>
 
-                        {/* Chevron */}
-                        <div className="chevron-container flex items-center">
+                        {/* Arrow Icon */}
+                        <div className="activity-arrow">
                           <img 
                             alt="arrow-right" 
-                            width="20" 
-                            height="20" 
+                            width="16" 
+                            height="16" 
                             src="/buttons/chevron-right.svg" 
                             style={{opacity: 0.4}} 
                           />
                         </div>
                       </div>
                     </div>
-
-                    {/* Activity Separator */}
-                    {actIdx < (day.activities?.length || 0) - 1 && (
-                      <div style={{width: '100%', height: '1px', backgroundColor: '#f3f4f6', margin: '16px 0'}}></div>
-                    )}
-                  </React.Fragment>
+                  </div>
                 );
               })}
 
-              {/* Add Activity Button */}
-              <div className="add-activity-section mt-6 pt-4" style={{borderTop: '1px dashed #d1d5db'}}>
-                <div className="add-tooltip mb-3 p-3 rounded-lg" style={{backgroundColor: '#f8fafc', border: '1px solid #e2e8f0'}}>
-                  <p className="text-sm font-medium mb-2" style={{color: '#374151'}}>What are you planning?</p>
-                  <div className="tooltip-options flex gap-4">
-                    <div className="option flex items-center gap-2 text-sm" style={{color: '#6b7280'}}>
-                      <img alt="activity" width="16" height="16" src="/attraction-icon-black.svg" />
-                      Activity
-                    </div>
-                    <div className="option flex items-center gap-2 text-sm" style={{color: '#6b7280'}}>
-                      <img alt="attraction" width="16" height="16" src="/attraction-icon-black.svg" />
-                      Attraction
-                    </div>
-                  </div>
-                </div>
-                
+              {/* Add Button with Timeline Connection */}
+              <div className="add-activity-section relative ml-12 mt-4">
+                {/* Timeline Dot for Add Button */}
+                <div 
+                  className="timeline-dot absolute -left-7 top-2.5 w-2.5 h-2.5 rounded-full bg-gray-300 border-2 border-white"
+                ></div>
+
                 <button 
-                  className="add-button flex items-center gap-2 px-4 py-2 rounded-lg border-2 border-dashed hover:border-solid hover:bg-blue-50 transition-all duration-200"
+                  className="add-button flex items-center justify-center gap-2 w-full py-2.5 rounded-lg border-2 border-dashed border-gray-300 hover:border-gray-400 hover:bg-gray-50 transition-all duration-200"
                   style={{
-                    borderColor: '#3b82f6',
-                    color: '#3b82f6',
-                    background: 'none',
-                    cursor: 'pointer',
-                    width: '100%',
-                    justifyContent: 'center'
+                    color: '#374151',
+                    background: 'white',
+                    cursor: 'pointer'
                   }}
                 >
-                  <img alt="add" width="16" height="16" src="/plus.svg" />
-                  Add Activity
+                  <img alt="add" width="14" height="14" src="/plus.svg" />
+                  <span className="font-medium text-sm">Add</span>
                 </button>
               </div>
             </div>
 
             {/* Day Separator (between days) */}
             {dayIdx < itinerary.length - 1 && (
-              <div style={{width: '100%', height: '2px', backgroundColor: '#e5e7eb', margin: '32px 0'}}></div>
+              <div style={{width: '100%', height: '1px', backgroundColor: '#e5e7eb', margin: '24px 0'}}></div>
             )}
           </div>
         );
